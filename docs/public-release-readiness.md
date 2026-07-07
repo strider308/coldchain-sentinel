@@ -126,3 +126,32 @@ Public demo safety wording:
 - [ ] Rollback path documented.
 
 Demo app URL/platform: pending.
+## Vercel Compatibility Decision
+
+Vercel CLI dry-run detected framework `Other` and prepared a file upload/static-style deployment. It did not use the existing Dockerfile as a long-running container web service. Do not deploy this app to Vercel unless Vercel container support is explicitly available and verified for this project without converting the app to Next.js/serverless.
+
+## Render Manual Fallback
+
+Use Render for the provider-disabled container deployment unless another container-capable host is explicitly selected.
+
+Manual Render steps:
+
+1. Open Render dashboard.
+2. Create a new Web Service.
+3. Connect `https://github.com/strider308/coldchain-sentinel`.
+4. Select Docker using the existing `Dockerfile`.
+5. Branch: `master` unless Render shows `main`.
+6. Root directory: repository root.
+7. Port: `8080`.
+8. Environment variables: none.
+9. Confirm no secrets are added.
+10. Deploy.
+11. Smoke-test `/`, `/review`, `/review.json`, and `/health`.
+
+Required smoke result:
+
+- `/` returns 200 and shows the synthetic deterministic dashboard.
+- `/review` returns 200 and shows the human review packet.
+- `/review.json` returns 200 and includes unresolved `PAL-SYN-1004`.
+- `/health` returns 200 and confirms provider-disabled baseline.
+- No AMD, Fireworks, production-readiness, real-world compliance, or autonomous-action claim appears.
