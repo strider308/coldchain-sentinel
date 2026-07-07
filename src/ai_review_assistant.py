@@ -84,9 +84,8 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
     payload = {
         "model": model,
         "messages": build_prompt(packet),
-        "max_tokens": 450,
+        "max_tokens": 350,
         "temperature": 0.2,
-        "response_format": {"type": "json_object"},
     }
     request = urllib.request.Request(
         FIREWORKS_URL,
@@ -98,7 +97,9 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             body = json.loads(response.read().decode("utf-8"))
-    except (OSError, TimeoutError, urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as exc:
+    except urllib.error.HTTPError as exc:
+        return fallback_brief(packet, f"Fireworks unavailable: HTTP {exc.code} {exc.reason}")
+    except (OSError, TimeoutError, urllib.error.URLError, json.JSONDecodeError) as exc:
         return fallback_brief(packet, f"Fireworks unavailable: {exc.__class__.__name__}")
 
     content = body.get("choices", [{}])[0].get("message", {}).get("content", "")
