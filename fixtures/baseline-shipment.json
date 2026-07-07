@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "coldchain-baseline-v0.1",
+  "dataClassification": "synthetic",
+  "shipment": {
+    "id": "SYN-SHIP-2026-06-26-A",
+    "label": "Synthetic cold-chain shipment",
+    "temperatureRangeC": {
+      "min": 2.0,
+      "max": 8.0
+    }
+  },
+  "sensorReadings": [
+    {
+      "id": "READ-SYN-001",
+      "evidenceId": "E-CC-001",
+      "timestampUtc": "2026-06-26T10:00:00Z",
+      "sensorId": "SYN-TEMP-01",
+      "zoneId": "Z1",
+      "temperatureC": 4.6,
+      "quality": "OK"
+    },
+    {
+      "id": "READ-SYN-002",
+      "evidenceId": "E-CC-001",
+      "timestampUtc": "2026-06-26T10:15:00Z",
+      "sensorId": "SYN-TEMP-01",
+      "zoneId": "Z1",
+      "temperatureC": 5.1,
+      "quality": "OK"
+    },
+    {
+      "id": "READ-SYN-003",
+      "evidenceId": "E-CC-001",
+      "timestampUtc": "2026-06-26T10:30:00Z",
+      "sensorId": "SYN-TEMP-01",
+      "zoneId": "Z1",
+      "temperatureC": 9.2,
+      "quality": "OK"
+    },
+    {
+      "id": "READ-SYN-004",
+      "evidenceId": "E-CC-001",
+      "timestampUtc": "2026-06-26T10:45:00Z",
+      "sensorId": "SYN-TEMP-01",
+      "zoneId": "Z1",
+      "temperatureC": 9.5,
+      "quality": "OK"
+    },
+    {
+      "id": "READ-SYN-005",
+      "evidenceId": "E-CC-001",
+      "timestampUtc": "2026-06-26T11:00:00Z",
+      "sensorId": "SYN-TEMP-01",
+      "zoneId": "Z1",
+      "temperatureC": 8.6,
+      "quality": "OK"
+    },
+    {
+      "id": "READ-SYN-006",
+      "evidenceId": "E-CC-001",
+      "timestampUtc": "2026-06-26T11:15:00Z",
+      "sensorId": "SYN-TEMP-01",
+      "zoneId": "Z1",
+      "temperatureC": 7.4,
+      "quality": "OK"
+    }
+  ],
+  "pallets": [
+    {
+      "id": "PAL-SYN-1001",
+      "evidenceId": "E-CC-003",
+      "zoneId": "Z1"
+    },
+    {
+      "id": "PAL-SYN-1002",
+      "evidenceId": "E-CC-003",
+      "zoneId": "Z1"
+    },
+    {
+      "id": "PAL-SYN-1003",
+      "evidenceId": "E-CC-003",
+      "zoneId": "Z1"
+    },
+    {
+      "id": "PAL-SYN-1004",
+      "evidenceId": "E-CC-006",
+      "zoneId": null,
+      "unresolvedReason": "missing zone mapping"
+    }
+  ],
+  "zoneMappings": [
+    {
+      "zoneId": "Z1",
+      "evidenceId": "E-CC-003",
+      "palletIds": ["PAL-SYN-1001", "PAL-SYN-1002", "PAL-SYN-1003"]
+    }
+  ],
+  "reviewPolicy": {
+    "evidenceId": "E-CC-004",
+    "humanReviewRequired": true,
+    "autonomousActionsForbidden": [
+      "release",
+      "quarantine",
+      "discard",
+      "reroute",
+      "customer_notification"
+    ]
+  },
+  "expected": {
+    "excursionStartUtc": "2026-06-26T10:30:00Z",
+    "excursionEndUtc": "2026-06-26T11:15:00Z",
+    "durationMinutes": 45,
+    "mappedPalletIds": ["PAL-SYN-1001", "PAL-SYN-1002", "PAL-SYN-1003"],
+    "unresolvedPalletIds": ["PAL-SYN-1004"],
+    "finalDisposition": "BLOCKED",
+    "reviewStatus": "HUMAN_REVIEW_REQUIRED"
+  }
+}
