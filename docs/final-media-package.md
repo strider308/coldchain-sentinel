@@ -41,8 +41,9 @@ ColdChain Sentinel hackathon demo cover image, clean SaaS dashboard style, cold-
 4. Deterministic rules engine: threshold duration, mapped pallets, unresolved PAL-SYN-1004.
 5. Human review packet: blockers, prohibited autonomous actions, reviewer checklist.
 6. Safety boundaries: provider-disabled, synthetic data, final disposition blocked, human review required.
-7. Containerized deployment and validation: Docker, Render URL, health route, Gitleaks, TruffleHog.
-8. What is next: public submission, optional provider addendum only after verification, no provider success claim today.
+7. Fireworks AI Review Assistant: optional, explanation-only, non-authoritative.
+8. Containerized deployment and validation: Docker, Render URL, health route, Gitleaks, TruffleHog.
+9. What is next: public submission, AMD only if verified, no autonomous action claim.
 
 ## 8. Speaker Notes
 
@@ -57,7 +58,7 @@ Slide 8: Provider paths remain optional and require addendum evidence before any
 
 ## 9. Demo Video Script
 
-Open https://coldchain-sentinel-35ex.onrender.com. This is ColdChain Sentinel, a synthetic deterministic cold-chain review demo. The dashboard shows shipment SYN-SHIP-2026-06-26-A and a deterministic excursion from 2026-06-26 10:30 UTC to 11:15 UTC, lasting 45 minutes. Three pallets are mapped: PAL-SYN-1001, PAL-SYN-1002, and PAL-SYN-1003. PAL-SYN-1004 remains unresolved because zone mapping is missing. The system blocks final disposition and requires human review. On the review packet page, the blockers and prohibited autonomous actions are visible. The JSON packet shows the same deterministic status: finalDisposition BLOCKED, reviewStatus HUMAN_REVIEW_REQUIRED, autonomousActionsAllowed false. The baseline is provider-disabled; AMD and Fireworks are not used or claimed. The point is simple: consequential cold-chain action needs auditable evidence and a human review boundary.
+Open https://coldchain-sentinel-35ex.onrender.com. This is ColdChain Sentinel, a synthetic deterministic cold-chain review demo. The dashboard shows shipment SYN-SHIP-2026-06-26-A and a deterministic excursion from 2026-06-26 10:30 UTC to 11:15 UTC, lasting 45 minutes. Three pallets are mapped: PAL-SYN-1001, PAL-SYN-1002, and PAL-SYN-1003. PAL-SYN-1004 remains unresolved because zone mapping is missing. The system blocks final disposition and requires human review. On the review packet page, the blockers and prohibited autonomous actions are visible. The JSON packet shows the same deterministic status: finalDisposition BLOCKED, reviewStatus HUMAN_REVIEW_REQUIRED, autonomousActionsAllowed false. The AI Review Assistant can provide an optional reviewer brief, but deterministic rules remain authoritative and the assistant does not control disposition. AMD is not used or claimed. The point is simple: consequential cold-chain action needs auditable evidence and a human review boundary.
 
 ## 10. Demo Recording Shot List
 
@@ -71,6 +72,7 @@ Open https://coldchain-sentinel-35ex.onrender.com. This is ColdChain Sentinel, a
 - Open review packet.
 - Show blocking reasons and prohibited autonomous actions.
 - Open review JSON briefly.
+- Open AI Review Assistant and show either Fireworks verified output or deterministic fallback.
 - End on safety boundary and why it matters.
 
 ## 11. Demo Recording Checklist

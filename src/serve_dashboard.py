@@ -8,6 +8,7 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+from ai_review_assistant import build_ai_review
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture
 
 HOST = "127.0.0.1"
@@ -100,8 +101,8 @@ def render_dashboard(case: dict[str, Any] | None = None) -> str:
   <header data-testid="demo-overview">
     <h1>ColdChain Sentinel</h1>
     <p data-testid="synthetic-scope-note">Synthetic demo data only. Deterministic rules are authoritative.</p>
-    <nav><a href="/">Dashboard</a><a href="/review" data-testid="review-packet-link">Review packet</a><a href="/review.json">Review JSON</a></nav>
-    {badge("Track 3 demo", "good")}{badge("Provider disabled", "warn")}{badge("No production validation", "warn")}
+    <nav><a href="/">Dashboard</a><a href="/review" data-testid="review-packet-link">Review packet</a><a href="/ai-review" data-testid="ai-review-link">AI review</a><a href="/review.json">Review JSON</a></nav>
+    {badge("Track 3 demo", "good")}{badge("Fireworks optional", "warn")}{badge("No production validation", "warn")}
   </header>
   <main>
     <section class="grid" aria-label="Shipment summary">
@@ -154,7 +155,7 @@ def render_review_packet(case: dict[str, Any] | None = None) -> str:
     <h1>Human Review Packet</h1>
     <p data-testid="packet-synthetic-label">Synthetic demo data only. This is not a validated pharmaceutical, medical, or compliance product.</p>
     <nav><a href="/">Dashboard</a><a href="/review.json">Review JSON</a></nav>
-    {badge("Final disposition blocked", "danger")}{badge("Human review required", "warn")}{badge("Provider disabled", "warn")}
+    {badge("Final disposition blocked", "danger")}{badge("Human review required", "warn")}{badge("Fireworks optional", "warn")}
   </header>
   <main>
     <section class="grid">
@@ -184,6 +185,60 @@ def render_review_packet(case: dict[str, Any] | None = None) -> str:
     return page("ColdChain Sentinel Review Packet", body)
 
 
+def render_ai_review(case: dict[str, Any] | None = None) -> str:
+    packet = build_review_packet(case or load_fixture())
+    ai_review = build_ai_review(packet)
+    result = ai_review["deterministicResult"]
+    provider = ai_review["assistant"]["provider"]
+    brief = ai_review["assistant"]["brief"]
+    safety_items = items(ai_review["safety"], "ai-safety")
+    checklist_items = items([str(value) for value in brief["reviewerChecklist"]], "ai-check")
+    missing_items = items([str(value) for value in brief["missingEvidence"]], "ai-missing")
+    root_cause_items = items([str(value) for value in brief["rootCauseHypotheses"]], "ai-root-cause")
+    why_items = items([str(value) for value in brief["whyBlocked"]], "ai-why-blocked")
+    unstructured = ai_review["assistant"].get("unstructuredAiResponse") or ""
+    unstructured_html = (
+        f'<section class="panel status-block" data-testid="ai-unstructured"><h2>Unstructured AI response</h2><p>{html.escape(unstructured)}</p></section>'
+        if unstructured
+        else ""
+    )
+    body = f"""
+  <header data-testid="ai-review-page">
+    <h1>AI Review Assistant</h1>
+    <p data-testid="ai-scope-note">AI-assisted explanation only. Deterministic rules remain authoritative.</p>
+    <nav><a href="/">Dashboard</a><a href="/review">Review packet</a><a href="/ai-review.json">AI Review JSON</a></nav>
+    {badge("Fireworks configured: " + ("yes" if provider["fireworksConfigured"] else "no"), "good" if provider["fireworksConfigured"] else "warn")}
+    {badge("Fireworks verified: " + ("yes" if provider["fireworksVerified"] else "no"), "good" if provider["fireworksVerified"] else "warn")}
+    {badge("AMD status: pending/not configured", "warn")}
+  </header>
+  <main>
+    <section class="grid" aria-label="Provider status">
+      <article class="panel" data-testid="provider-status"><h2>Provider status</h2><p>{html.escape(provider["status"])}</p><p>Model: {html.escape(provider["fireworksModel"])}</p><p>AMD status: pending/not configured.</p></article>
+      <article class="panel status-block" data-testid="ai-safety-boundary"><h2>Safety boundary</h2><ul>{safety_items}</ul></article>
+    </section>
+
+    <section class="grid" aria-label="Deterministic facts">
+      <article class="panel" data-testid="ai-shipment-id"><h2>Shipment</h2><p class="metric">{html.escape(result["shipmentId"])}</p></article>
+      <article class="panel" data-testid="ai-duration"><h2>Excursion duration</h2><p class="metric">{result["excursion"]["durationMinutes"]} minutes</p></article>
+      <article class="panel status-block" data-testid="ai-final-disposition"><h2>Final disposition</h2><p class="metric">{html.escape(result["finalDisposition"])}</p></article>
+      <article class="panel status-block" data-testid="ai-review-status"><h2>Review status</h2><p>{html.escape(result["reviewStatus"])}</p></article>
+      <article class="panel status-block" data-testid="ai-unresolved-pallet"><h2>Unresolved pallet</h2><p>{html.escape(", ".join(result["unresolvedPalletIds"]))}</p></article>
+      <article class="panel status-block" data-testid="ai-autonomous-actions"><h2>Autonomous actions allowed</h2><p>{str(result["autonomousActionsAllowed"]).lower()}</p></article>
+    </section>
+
+    <section class="grid" aria-label="AI reviewer brief">
+      <article class="panel" data-testid="ai-summary"><h2>Reviewer brief</h2><p>{html.escape(str(brief["summary"]))}</p></article>
+      <article class="panel status-block" data-testid="ai-why-blocked"><h2>Why blocked</h2><ul>{why_items}</ul></article>
+      <article class="panel status-block" data-testid="ai-missing-evidence"><h2>Missing evidence</h2><ul>{missing_items}</ul></article>
+      <article class="panel" data-testid="ai-reviewer-checklist"><h2>Reviewer checklist</h2><ul>{checklist_items}</ul></article>
+      <article class="panel" data-testid="ai-root-cause"><h2>Root-cause hypotheses</h2><ul>{root_cause_items}</ul></article>
+      <article class="panel" data-testid="ai-safety-note"><h2>Safety note</h2><p>{html.escape(str(brief["safetyNote"]))}</p></article>
+    </section>
+    {unstructured_html}
+  </main>
+"""
+    return page("ColdChain Sentinel AI Review Assistant", body)
+
 class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path in ("/", "/index.html"):
@@ -192,11 +247,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/review":
             self.respond_text(render_review_packet())
             return
+        if self.path == "/ai-review":
+            self.respond_text(render_ai_review())
+            return
         if self.path == "/api/baseline":
             self.respond_json(evaluate_case(load_fixture()))
             return
         if self.path == "/review.json":
             self.respond_json(build_review_packet(load_fixture()))
+            return
+        if self.path == "/ai-review.json":
+            self.respond_json(build_ai_review(build_review_packet(load_fixture())))
             return
         if self.path == "/health":
             self.respond_json({"ok": True, "providers": "disabled"})
@@ -223,11 +284,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
 def self_check() -> None:
     dashboard = render_dashboard()
     review = render_review_packet()
+    ai_review = render_ai_review()
     packet = build_review_packet(load_fixture())
     required = [
         'data-testid="demo-overview"',
         'data-testid="review-packet-link"',
+        'data-testid="ai-review-link"',
         'data-testid="review-packet-page"',
+        'data-testid="ai-review-page"',
+        'data-testid="provider-status"',
+        "AI-assisted explanation only.",
         'data-testid="packet-blocking-reasons"',
         'data-testid="packet-prohibited-actions"',
         'data-testid="reviewer-checklist"',
@@ -240,7 +306,7 @@ def self_check() -> None:
         "not a validated pharmaceutical, medical, or compliance product",
         "PAL-SYN-1004 has missing zone mapping.",
     ]
-    combined = dashboard + review + json.dumps(packet, sort_keys=True)
+    combined = dashboard + review + ai_review + json.dumps(packet, sort_keys=True)
     for text in required:
         assert text in combined, text
     assert packet["result"]["excursion"]["durationMinutes"] == 45

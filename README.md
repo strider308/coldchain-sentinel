@@ -19,10 +19,11 @@ The demo is product/workflow oriented: it focuses on auditability, a clear marke
 ## Demo Status
 
 - Synthetic deterministic demo.
-- Provider-disabled baseline.
+- Provider-disabled deterministic baseline.
+- Optional Fireworks AI Review Assistant for non-authoritative reviewer explanations.
 - Human review required.
 - Final disposition blocked.
-- AMD and Fireworks are not used in the baseline.
+- AMD is not used or claimed. Fireworks is optional and never controls disposition.
 
 ## Safety Boundaries
 
@@ -49,7 +50,7 @@ The demo is product/workflow oriented: it focuses on auditability, a clear marke
 Run the local dashboard:
 
 ```powershell
-python projects/coldchain/src/serve_dashboard.py
+python src/serve_dashboard.py
 ```
 
 Open:
@@ -61,13 +62,13 @@ http://127.0.0.1:8080/
 Run the deterministic baseline self-check:
 
 ```powershell
-python projects/coldchain/src/coldchain_baseline.py
+python src/coldchain_baseline.py
 ```
 
 Run the dashboard and review packet self-check:
 
 ```powershell
-python projects/coldchain/src/serve_dashboard.py --check
+python src/serve_dashboard.py --check
 ```
 
 ## Docker Build And Run
@@ -75,7 +76,7 @@ python projects/coldchain/src/serve_dashboard.py --check
 Build the image:
 
 ```powershell
-docker build -t coldchain-sentinel:local projects/coldchain
+docker build -t coldchain-sentinel:local .
 ```
 
 Run the container:
@@ -95,7 +96,7 @@ http://127.0.0.1:8080/
 Run with Compose:
 
 ```powershell
-docker compose -f projects/coldchain/docker-compose.yml up --build
+docker compose up --build
 ```
 
 Compose serves the app at:
@@ -109,6 +110,8 @@ http://127.0.0.1:18080/
 - `/` - deterministic dashboard.
 - `/review` - human review packet page.
 - `/review.json` - deterministic review packet JSON.
+- `/ai-review` - optional Fireworks-assisted reviewer brief with deterministic fallback.
+- `/ai-review.json` - AI review assistant JSON with unchanged deterministic result.
 - `/health` - provider-disabled health status.
 
 ## Review Packet Instructions
@@ -125,7 +128,7 @@ The review packet is generated from the synthetic fixture and deterministic rule
 Run the deterministic validation suite:
 
 ```powershell
-python projects/coldchain/tests/test_coldchain_validation.py
+python tests/test_coldchain_validation.py
 ```
 
 Run JSON validation from the repo root:
@@ -166,7 +169,7 @@ Batch 5 validated the provider-disabled container path with:
 - Docker healthcheck healthy status.
 - Docker Compose build/run health route check.
 
-No AMD or Fireworks credentials are required for the deterministic container demo.
+No AMD or Fireworks credentials are required for the deterministic container demo. Set `FIREWORKS_API_KEY` only when intentionally verifying the optional AI Review Assistant; `FIREWORKS_MODEL` is optional and defaults to `accounts/fireworks/models/deepseek-v3p1`.
 
 ## Public Repo And Deployment Status
 
@@ -182,14 +185,14 @@ No AMD or Fireworks credentials are required for the deterministic container dem
 - Platform: Render.
 - Public demo URL: https://coldchain-sentinel-35ex.onrender.com
 - Public repository: https://github.com/strider308/coldchain-sentinel
-- Status: live provider-disabled deterministic baseline.
+- Status: live deterministic baseline. The Fireworks assistant is optional and must be smoke-tested after redeploy before any verification claim.
 
 ## Provider Status
 
-- Fireworks: credits received, but technical integration remains unverified.
+- Fireworks: credits received; optional AI Review Assistant integration is non-authoritative and verified only after a successful real API call.
 - AMD: credits not received.
 - No AMD success is claimed.
-- No Fireworks success is claimed.
+- Fireworks does not decide or alter final disposition.
 - Any future provider use requires a provider addendum covering credentials, access, runtime/model behavior, cost/rate limits, logging, privacy, failure modes, fallback behavior, and demo-safe wording.
 - Providers must remain optional and non-authoritative; deterministic rules remain the source of truth.
 

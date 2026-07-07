@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import urllib.request
@@ -15,7 +16,7 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture  # noqa: E402
-from serve_dashboard import DashboardHandler, render_dashboard, render_review_packet  # noqa: E402
+from serve_dashboard import DashboardHandler, render_ai_review, render_dashboard, render_review_packet  # noqa: E402
 
 
 def assert_contains(text: str, needles: list[str]) -> None:
@@ -67,6 +68,7 @@ def test_review_packet(case: dict[str, Any]) -> None:
 def test_rendered_pages(case: dict[str, Any]) -> None:
     dashboard = render_dashboard(case)
     review = render_review_packet(case)
+    ai_review = render_ai_review(case)
 
     assert_contains(
         dashboard,
@@ -83,6 +85,19 @@ def test_rendered_pages(case: dict[str, Any]) -> None:
             "No autonomous release, quarantine, discard, reroute, or customer notification.",
         ],
     )
+    assert_contains(
+        ai_review,
+        [
+            'data-testid="ai-review-page"',
+            'data-testid="provider-status"',
+            "AI-assisted explanation only.",
+            "Deterministic rules remain authoritative.",
+            "No autonomous release, quarantine, discard, reroute, or customer notification.",
+            "Synthetic demo data only.",
+            "Not a validated pharmaceutical, medical, logistics compliance, or medical product.",
+        ],
+    )
+
     assert_contains(
         review,
         [
@@ -112,6 +127,8 @@ def test_routes(case: dict[str, Any]) -> None:
         dashboard_status, dashboard = fetch(base_url, "/")
         review_status, review = fetch(base_url, "/review")
         review_json_status, review_json = fetch(base_url, "/review.json")
+        ai_review_status, ai_review = fetch(base_url, "/ai-review")
+        ai_review_json_status, ai_review_json = fetch(base_url, "/ai-review.json")
         health_status, health_json = fetch(base_url, "/health")
     finally:
         server.shutdown()
@@ -121,26 +138,43 @@ def test_routes(case: dict[str, Any]) -> None:
     assert dashboard_status == 200
     assert review_status == 200
     assert review_json_status == 200
+    assert ai_review_status == 200
+    assert ai_review_json_status == 200
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
     assert "Final disposition blocked." in review
+    assert "Fireworks verified: no" in ai_review
+    assert "AI-assisted explanation only." in ai_review
 
     packet = json.loads(review_json)
     assert packet == build_review_packet(case)
     assert packet["result"]["excursion"]["durationMinutes"] == 45
     assert packet["result"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
 
+    ai_packet = json.loads(ai_review_json)
+    assert ai_packet["deterministicResult"] == packet["result"]
+    assert ai_packet["assistant"]["provider"]["fireworksVerified"] is False
+    assert ai_packet["deterministicResult"]["finalDisposition"] == "BLOCKED"
+    assert ai_packet["deterministicResult"]["reviewStatus"] == "HUMAN_REVIEW_REQUIRED"
+    assert ai_packet["deterministicResult"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+    assert ai_packet["deterministicResult"]["autonomousActionsAllowed"] is False
+
     health = json.loads(health_json)
     assert health == {"ok": True, "providers": "disabled"}
 
 
 def main() -> None:
-    case = load_fixture()
-    test_deterministic_baseline(case)
-    test_review_packet(case)
-    test_rendered_pages(case)
-    test_routes(case)
-    print("coldchain validation suite passed")
+    old_key = os.environ.pop("FIREWORKS_API_KEY", None)
+    try:
+        case = load_fixture()
+        test_deterministic_baseline(case)
+        test_review_packet(case)
+        test_rendered_pages(case)
+        test_routes(case)
+        print("coldchain validation suite passed")
+    finally:
+        if old_key is not None:
+            os.environ["FIREWORKS_API_KEY"] = old_key
 
 
 if __name__ == "__main__":
