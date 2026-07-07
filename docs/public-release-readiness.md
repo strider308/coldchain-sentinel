@@ -118,14 +118,14 @@ Public demo safety wording:
 
 - [ ] Public repo/export decision complete.
 - [ ] Final scans pass on export.
-- [ ] Hosting platform selected.
-- [ ] Baseline deployment configured without secrets.
-- [ ] Health route passes.
-- [ ] Route smoke passes.
-- [ ] Demo URL recorded in submission assets.
+- [x] Hosting platform selected: Render.
+- [x] Baseline deployment configured without secrets.
+- [x] Health route passes on Render.
+- [x] Route smoke passes on Render.
+- [x] Demo URL recorded in submission assets.
 - [ ] Rollback path documented.
 
-Demo app URL/platform: pending.
+Demo app URL/platform: https://coldchain-sentinel-35ex.onrender.com on Render. Status: live provider-disabled baseline smoke-tested.
 ## Vercel Compatibility Decision
 
 Vercel CLI dry-run detected framework `Other` and prepared a file upload/static-style deployment. It did not use the existing Dockerfile as a long-running container web service. Do not deploy this app to Vercel unless Vercel container support is explicitly available and verified for this project without converting the app to Next.js/serverless.

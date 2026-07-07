@@ -170,12 +170,19 @@ No AMD or Fireworks credentials are required for the deterministic container dem
 
 ## Public Repo And Deployment Status
 
-- Public GitHub repository: not created yet.
-- Deployment/demo app URL: not created yet.
+- Public GitHub repository: https://github.com/strider308/coldchain-sentinel
+- Deployment/demo app URL: https://coldchain-sentinel-35ex.onrender.com
 - Planned approach: clean export or fresh public repo from an approved source tree.
 - Do not publish the full private planning history.
 - Run Gitleaks and TruffleHog before public repo and deployment work.
 - Keep `.codegraph/`, scanner output, local logs, build/cache folders, secrets, and internal-only artifacts out of public artifacts.
+
+## Live Demo
+
+- Platform: Render.
+- Public demo URL: https://coldchain-sentinel-35ex.onrender.com
+- Public repository: https://github.com/strider308/coldchain-sentinel
+- Status: live provider-disabled deterministic baseline.
 
 ## Provider Status
 

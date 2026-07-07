@@ -1,10 +1,10 @@
 # ColdChain Sentinel Submission Asset Drafts
 
-Status: draft submission copy only. Public repo, deployment, slides, video, and cover image are not created yet. AMD and Fireworks success are not claimed.
+Status: draft submission copy only. Public repo and Render deployment are live; slides, video, cover image, final form submission, and official deadline confirmation remain pending. AMD and Fireworks success are not claimed.
 
-Public GitHub repo URL: pending.
-Demo app URL/platform: pending.
-Deployment status: pending.
+Public GitHub repo URL: https://github.com/strider308/coldchain-sentinel
+Demo app URL/platform: https://coldchain-sentinel-35ex.onrender.com on Render
+Deployment status: live on Render; provider-disabled baseline smoke-tested.
 Official deadline: pending dashboard/Discord confirmation.
 
 ## 1. Draft Title
@@ -81,7 +81,7 @@ Create a clean hackathon cover image for "ColdChain Sentinel" showing a cold-cha
 
 ## 10. Public GitHub Repo Checklist
 
-- [ ] Public GitHub repo URL recorded: pending.
+- [x] Public GitHub repo URL recorded.
 - [ ] Use clean export or fresh public repo from approved source tree.
 - [ ] Do not publish full private planning history.
 - [ ] Re-run Gitleaks.
@@ -93,15 +93,15 @@ Create a clean hackathon cover image for "ColdChain Sentinel" showing a cold-cha
 
 ## 11. Demo App URL/Platform Checklist
 
-- [ ] Demo app URL/platform recorded: pending.
-- [ ] Deployment status recorded: pending.
-- [ ] Choose hosting platform after public repo/export decision.
-- [ ] Deploy provider-disabled baseline first.
-- [ ] Set no provider credentials for baseline deployment.
-- [ ] Validate `/health`.
-- [ ] Smoke-test `/`, `/review`, and `/review.json`.
+- [x] Demo app URL/platform recorded.
+- [x] Deployment status recorded: live on Render.
+- [x] Hosting platform selected: Render.
+- [x] Provider-disabled baseline deployed on Render.
+- [x] No provider credentials required for baseline deployment.
+- [x] `/health` validated on live Render URL.
+- [x] `/`, `/review`, `/review.json`, and `/health` smoke-tested on live Render URL.
 - [ ] Confirm public demo safety copy is visible.
-- [ ] Record final demo URL for lablab.ai submission.
+- [x] Final demo URL recorded for lablab.ai submission.
 
 ## 12. Provider Addendum Checklist
 
