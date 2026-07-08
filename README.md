@@ -8,6 +8,8 @@ ColdChain Sentinel loads a synthetic shipment fixture, applies deterministic col
 
 The beta app also includes a small static synthetic case workspace for reviewing multiple demo scenarios without uploads, databases, or real operational data.
 
+The case workspace now includes a deterministic telemetry engine and rule trace so reviewers can see how synthetic readings become a review packet: telemetry, excursion detection, zone impact, pallet mapping, blockers, review status, and autonomous-action denial.
+
 ## Why It Matters
 
 Cold-chain teams need a clear bridge from raw telemetry to review-ready evidence. This demo shows that consequential logistics decisions should expose missing evidence instead of hiding it behind an automated answer.
@@ -51,7 +53,7 @@ The demo is product/workflow oriented: it focuses on auditability, a clear marke
 
 - `blocked-unresolved-pallet` - temperature excursion with missing zone mapping for `PAL-SYN-1004`; blocked and human-review required.
 - `excursion-fully-mapped` - temperature excursion with all pallets mapped; still human-review required and no autonomous action allowed.
-- `no-excursion-control` - synthetic control with no excursion and no unresolved mapping; not a real-world release approval.
+- `no-excursion-control` - synthetic control with no excursion and no unresolved mapping; no real-world operational decision is made.
 
 ## Local Run Instructions
 
@@ -119,6 +121,7 @@ http://127.0.0.1:18080/
 - `/cases` - synthetic case workspace.
 - `/cases/blocked-unresolved-pallet` - case detail page.
 - `/cases/blocked-unresolved-pallet/review` - reviewer workspace.
+- `/cases/blocked-unresolved-pallet/trace.json` - deterministic rule trace JSON.
 - `/cases/blocked-unresolved-pallet/evidence.json` - case evidence timeline JSON.
 - `/cases/blocked-unresolved-pallet/export.md` - markdown export packet.
 - `/review` - human review packet page.
@@ -128,6 +131,12 @@ http://127.0.0.1:18080/
 - `/health` - provider-disabled health status.
 
 `/ai-review` and `/ai-review.json` accept an optional `caseId` query parameter for the synthetic cases, for example `/ai-review?caseId=excursion-fully-mapped`.
+
+## Deterministic Rule Trace
+
+Each synthetic case includes local synthetic temperature readings. The app derives threshold breaches, excursion windows, affected zones, pallet mapping state, blockers, review status, and `autonomousActionsAllowed: false` without Fireworks or any external dataset.
+
+Trace items include `ruleId`, rule name, status, input summary, output summary, evidence IDs, and safety impact. Example rule IDs include `TEMP_THRESHOLD_CHECK`, `EXCURSION_WINDOW_CALCULATION`, `ZONE_IMPACT_IDENTIFICATION`, `PALLET_MAPPING_CHECK`, `HUMAN_REVIEW_GATE`, and `AUTONOMOUS_ACTION_DENY`.
 
 ## Review Packet Instructions
 

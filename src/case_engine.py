@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -34,12 +35,87 @@ def get_case(case_id: str = BASELINE_CASE_ID) -> dict[str, Any]:
     raise KeyError(case_id)
 
 
+def parse_utc(value: str) -> datetime:
+    if not value.endswith("Z"):
+        raise ValueError(f"timestamp must be UTC/Z: {value}")
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
+def temperature_readings(case: dict[str, Any]) -> list[dict[str, Any]]:
+    return sorted(case["temperatureReadings"], key=lambda reading: parse_utc(reading["timestampUtc"]))
+
+
+def detect_excursion(case: dict[str, Any]) -> dict[str, Any] | None:
+    threshold = float(case["thresholdMaxC"])
+    readings = temperature_readings(case)
+    start = None
+    high_evidence = []
+    for reading in readings:
+        if reading["temperatureC"] > threshold:
+            start = start or reading
+            high_evidence.append(reading["evidenceId"])
+            continue
+        if start is not None:
+            minutes = int(
+                (parse_utc(reading["timestampUtc"]) - parse_utc(start["timestampUtc"])).total_seconds() // 60
+            )
+            return {
+                "startUtc": start["timestampUtc"],
+                "endUtc": reading["timestampUtc"],
+                "durationMinutes": minutes,
+                "thresholdMaxC": threshold,
+                "zoneId": start["zoneId"],
+                "evidenceIds": high_evidence,
+            }
+    return None
+
+
+def zone_mapped_pallets(case: dict[str, Any], zone_id: str | None) -> list[str]:
+    if zone_id is None:
+        mapped = {pallet for mapping in case["zoneMappings"] for pallet in mapping["palletIds"]}
+    else:
+        mapped = {
+            pallet
+            for mapping in case["zoneMappings"]
+            if mapping["zoneId"] == zone_id
+            for pallet in mapping["palletIds"]
+        }
+    return [pallet for pallet in case["palletIds"] if pallet in mapped]
+
+
+def unresolved_pallets(case: dict[str, Any], mapped: list[str]) -> list[str]:
+    mapped_set = set(mapped)
+    return [pallet for pallet in case["palletIds"] if pallet not in mapped_set]
+
+
+def derive_blockers(case: dict[str, Any], excursion: dict[str, Any] | None, unresolved: list[str]) -> list[str]:
+    blockers = []
+    if excursion:
+        blockers.append("TEMPERATURE_EXCURSION_DETECTED")
+    if unresolved:
+        blockers.append("UNRESOLVED_PALLET_MAPPING")
+    if excursion:
+        blockers.append("HUMAN_REVIEW_REQUIRED")
+    if not excursion:
+        blockers.append("SYNTHETIC_CONTROL_REVIEW")
+    return blockers
+
+
+def derive_review_status(excursion: dict[str, Any] | None) -> str:
+    return "HUMAN_REVIEW_REQUIRED" if excursion else "CONTROL_REVIEW_COMPLETE"
+
+
+def derive_final_disposition(excursion: dict[str, Any] | None) -> str:
+    return "BLOCKED" if excursion else "NO_EXCURSION_CONTROL"
+
+
 def case_result(case: dict[str, Any], simulate_resolved: bool = False) -> dict[str, Any]:
-    mapped = list(case["mappedPalletIds"])
-    unresolved = list(case["unresolvedPalletIds"])
-    blockers = list(case["blockers"])
-    review_status = case["reviewStatus"]
-    final_disposition = case["finalDisposition"]
+    excursion = detect_excursion(case)
+    mapped = zone_mapped_pallets(case, excursion["zoneId"] if excursion else None)
+    unresolved = unresolved_pallets(case, mapped)
+    blockers = derive_blockers(case, excursion, unresolved)
+    review_status = derive_review_status(excursion)
+    final_disposition = derive_final_disposition(excursion)
 
     if simulate_resolved and case["caseId"] == BASELINE_CASE_ID:
         mapped = sorted(set(mapped + unresolved))
@@ -50,7 +126,7 @@ def case_result(case: dict[str, Any], simulate_resolved: bool = False) -> dict[s
 
     return {
         "shipmentId": case["shipmentId"],
-        "excursion": case["excursion"],
+        "excursion": excursion,
         "mappedPalletIds": mapped,
         "unresolvedPalletIds": unresolved,
         "reviewStatus": review_status,
@@ -58,6 +134,100 @@ def case_result(case: dict[str, Any], simulate_resolved: bool = False) -> dict[s
         "autonomousActionsAllowed": False,
         "blockers": blockers,
     }
+
+
+def rule_trace(case: dict[str, Any], simulate_resolved: bool = False) -> list[dict[str, Any]]:
+    result = case_result(case, simulate_resolved)
+    excursion = result["excursion"]
+    readings = temperature_readings(case)
+    high = [reading for reading in readings if reading["temperatureC"] > case["thresholdMaxC"]]
+    mapped = result["mappedPalletIds"]
+    unresolved = result["unresolvedPalletIds"]
+    trace = [
+        {
+            "ruleId": "TEMP_THRESHOLD_CHECK",
+            "ruleName": "Temperature threshold check",
+            "status": "REVIEW_REQUIRED" if high else "PASS",
+            "inputSummary": f'{len(readings)} synthetic readings checked against {case["thresholdMaxC"]} C.',
+            "outputSummary": "Threshold exceeded in synthetic telemetry." if high else "No synthetic readings exceeded threshold.",
+            "evidenceIds": [reading["evidenceId"] for reading in high],
+            "safetyImpact": "Threshold breach requires deterministic review." if high else "Control case remains demo-only.",
+        },
+        {
+            "ruleId": "EXCURSION_WINDOW_CALCULATION",
+            "ruleName": "Excursion window calculation",
+            "status": "INFO" if excursion else "PASS",
+            "inputSummary": "Closed breach window derived from synthetic readings.",
+            "outputSummary": (
+                f'{excursion["startUtc"]} to {excursion["endUtc"]}; {excursion["durationMinutes"]} minutes.'
+                if excursion
+                else "No excursion window detected."
+            ),
+            "evidenceIds": excursion["evidenceIds"] if excursion else [],
+            "safetyImpact": "Excursion duration is carried into reviewer packet." if excursion else "No excursion fact is created.",
+        },
+        {
+            "ruleId": "ZONE_IMPACT_IDENTIFICATION",
+            "ruleName": "Zone impact identification",
+            "status": "INFO",
+            "inputSummary": "Affected zone comes from first over-threshold synthetic reading.",
+            "outputSummary": f'Zone {excursion["zoneId"]} affected.' if excursion else "No affected zone.",
+            "evidenceIds": excursion["evidenceIds"] if excursion else [],
+            "safetyImpact": "Zone determines pallet mapping scope." if excursion else "No zone impact is applied.",
+        },
+        {
+            "ruleId": "PALLET_MAPPING_CHECK",
+            "ruleName": "Pallet mapping check",
+            "status": "REVIEW_REQUIRED" if unresolved else "PASS",
+            "inputSummary": f'{len(case["palletIds"])} synthetic pallets checked against zone mappings.',
+            "outputSummary": (
+                f'Mapped: {", ".join(mapped) or "None"}; unresolved: {", ".join(unresolved) or "None"}.'
+            ),
+            "evidenceIds": [],
+            "safetyImpact": "Unresolved mapping blocks packet completion." if unresolved else "Mapping is complete for synthetic review.",
+        },
+        {
+            "ruleId": "UNRESOLVED_MAPPING_BLOCKER",
+            "ruleName": "Unresolved mapping blocker",
+            "status": "REVIEW_REQUIRED" if unresolved else "PASS",
+            "inputSummary": "Unresolved synthetic pallet IDs are checked.",
+            "outputSummary": ", ".join(unresolved) if unresolved else "No unresolved synthetic pallet mapping.",
+            "evidenceIds": [],
+            "safetyImpact": "Requires human review." if unresolved else "No unresolved-mapping blocker.",
+        },
+        {
+            "ruleId": "HUMAN_REVIEW_GATE",
+            "ruleName": "Human review gate",
+            "status": "REVIEW_REQUIRED" if result["reviewStatus"] == "HUMAN_REVIEW_REQUIRED" else "INFO",
+            "inputSummary": "Deterministic status and blockers are evaluated.",
+            "outputSummary": result["reviewStatus"],
+            "evidenceIds": [],
+            "safetyImpact": "Reviewer packet remains non-operational.",
+        },
+        {
+            "ruleId": "AUTONOMOUS_ACTION_DENY",
+            "ruleName": "Autonomous action deny",
+            "status": "PASS",
+            "inputSummary": "All synthetic scenarios force autonomousActionsAllowed to false.",
+            "outputSummary": "autonomousActionsAllowed: false",
+            "evidenceIds": [],
+            "safetyImpact": "AI and UI cannot authorize operational action.",
+        },
+    ]
+    if simulate_resolved and case["caseId"] == BASELINE_CASE_ID:
+        trace.insert(
+            4,
+            {
+                "ruleId": "SIMULATED_MAPPING_RESOLUTION",
+                "ruleName": "Simulated mapping resolution",
+                "status": "INFO",
+                "inputSummary": "PAL-SYN-1004 is synthetically mapped for packet completion.",
+                "outputSummary": "Review packet completion is simulated; no operational action is authorized.",
+                "evidenceIds": [],
+                "safetyImpact": "Simulation does not authorize shipment movement.",
+            },
+        )
+    return trace
 
 
 def timeline(case: dict[str, Any], simulate_resolved: bool = False) -> list[dict[str, str]]:
@@ -87,6 +257,20 @@ def timeline(case: dict[str, Any], simulate_resolved: bool = False) -> list[dict
     return rows
 
 
+def telemetry_timeline(case: dict[str, Any]) -> list[dict[str, Any]]:
+    threshold = case["thresholdMaxC"]
+    return [
+        {
+            "timestampUtc": reading["timestampUtc"],
+            "temperatureC": reading["temperatureC"],
+            "zoneId": reading["zoneId"],
+            "thresholdExceeded": reading["temperatureC"] > threshold,
+            "evidenceId": reading["evidenceId"],
+        }
+        for reading in temperature_readings(case)
+    ]
+
+
 def case_packet(case: dict[str, Any], simulate_resolved: bool = False) -> dict[str, Any]:
     result = case_result(case, simulate_resolved)
     blocking_reasons = [blocker.replace("_", " ").title() + "." for blocker in result["blockers"]]
@@ -108,6 +292,8 @@ def case_packet(case: dict[str, Any], simulate_resolved: bool = False) -> dict[s
         "limitations": list(case["safetyDisclaimers"]) + PROHIBITED_ACTIONS,
         "unresolvedEvidence": [f"{pallet_id} has missing zone mapping." for pallet_id in result["unresolvedPalletIds"]],
         "evidenceTimeline": timeline(case, simulate_resolved),
+        "telemetryTimeline": telemetry_timeline(case),
+        "ruleTrace": rule_trace(case, simulate_resolved),
     }
 
 
@@ -119,7 +305,20 @@ def evidence_json(case: dict[str, Any], simulate_resolved: bool = False) -> dict
         "scenarioSummary": packet["scenarioSummary"],
         "result": packet["result"],
         "timeline": packet["evidenceTimeline"],
+        "telemetryTimeline": packet["telemetryTimeline"],
+        "trace": packet["ruleTrace"],
         "reviewerChecklist": packet["reviewerChecklist"],
+        "safetyDisclaimers": packet["limitations"],
+    }
+
+
+def trace_json(case: dict[str, Any], simulate_resolved: bool = False) -> dict[str, Any]:
+    packet = case_packet(case, simulate_resolved)
+    return {
+        "caseId": packet["caseId"],
+        "shipmentId": packet["result"]["shipmentId"],
+        "trace": packet["ruleTrace"],
+        "result": packet["result"],
         "safetyDisclaimers": packet["limitations"],
     }
 
@@ -159,6 +358,14 @@ def export_markdown(case: dict[str, Any], simulate_resolved: bool = False) -> st
         ]
 
     timeline_lines = [f'- {row["time"]}: {row["event"]}' for row in packet["evidenceTimeline"]]
+    telemetry_lines = [
+        f'- {row["timestampUtc"]}: {row["temperatureC"]} C, zone {row["zoneId"]}, thresholdExceeded {str(row["thresholdExceeded"]).lower()}, evidence {row["evidenceId"]}'
+        for row in packet["telemetryTimeline"]
+    ]
+    trace_lines = [
+        f'- {row["ruleId"]}: {row["status"]} - {row["outputSummary"]} Safety impact: {row["safetyImpact"]}'
+        for row in packet["ruleTrace"]
+    ]
     return "\n".join(
         [
             f'# {packet["caseTitle"]}',
@@ -174,8 +381,14 @@ def export_markdown(case: dict[str, Any], simulate_resolved: bool = False) -> st
             f'- reviewStatus: {result["reviewStatus"]}',
             f'- autonomousActionsAllowed: {str(result["autonomousActionsAllowed"]).lower()}',
             "",
+            "## Synthetic Telemetry Summary",
+            *telemetry_lines,
+            "",
             "## Evidence Timeline",
             *timeline_lines,
+            "",
+            "## Deterministic Rule Trace",
+            *trace_lines,
             "",
             "## Reviewer Checklist",
             bullet(packet["reviewerChecklist"]),

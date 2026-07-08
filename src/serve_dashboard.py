@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from ai_review_assistant import build_ai_review
-from case_engine import case_packet, evidence_json, export_markdown, get_case, load_cases
+from case_engine import case_packet, evidence_json, export_markdown, get_case, load_cases, trace_json
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture
 
 HOST = "127.0.0.1"
@@ -35,6 +35,40 @@ def timeline_items(values: list[dict[str, str]]) -> str:
     return "\n".join(
         f'<li data-testid="timeline-{html.escape(row["time"])}"><strong>{html.escape(row["time"])}</strong> - {html.escape(row["event"])}</li>'
         for row in values
+    )
+
+
+def trace_table(values: list[dict[str, Any]]) -> str:
+    return table(
+        ["Rule", "Status", "Explanation", "Evidence IDs", "Safety impact"],
+        [
+            [
+                row["ruleName"],
+                row["status"],
+                row["outputSummary"],
+                ", ".join(row["evidenceIds"]) or "None",
+                row["safetyImpact"],
+            ]
+            for row in values
+        ],
+        "deterministic-rule-trace",
+    )
+
+
+def telemetry_table(values: list[dict[str, Any]]) -> str:
+    return table(
+        ["Timestamp", "Temperature", "Zone", "Threshold exceeded?", "Evidence ID"],
+        [
+            [
+                row["timestampUtc"],
+                f'{row["temperatureC"]} C',
+                row["zoneId"],
+                str(row["thresholdExceeded"]).lower(),
+                row["evidenceId"],
+            ]
+            for row in values
+        ],
+        "telemetry-timeline",
     )
 
 
@@ -181,6 +215,7 @@ def render_cases() -> str:
         <div class="toolbar">
           <a class="button" href="/cases/{html.escape(case["caseId"])}">Open case</a>
           <a class="button" href="/cases/{html.escape(case["caseId"])}/review">Review workspace</a>
+          <a class="button" href="/cases/{html.escape(case["caseId"])}/trace.json">Trace JSON</a>
           <a class="button" href="/cases/{html.escape(case["caseId"])}/evidence.json">Evidence JSON</a>
           <a class="button" href="/cases/{html.escape(case["caseId"])}/export.md">Export</a>
           <a class="button" href="/ai-review?caseId={html.escape(case["caseId"])}">Fireworks brief</a>
@@ -226,7 +261,7 @@ def render_case_detail(case_id: str) -> str:
   <header data-testid="case-detail">
     <h1>{html.escape(case["caseTitle"])}</h1>
     <p>{html.escape(case["scenarioSummary"])}</p>
-    <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/review">Reviewer workspace</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a><a href="/ai-review?caseId={html.escape(case_id)}">AI Review</a><a href="/ai-review.json?caseId={html.escape(case_id)}">AI JSON</a></nav>
+    <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/review">Reviewer workspace</a><a href="/cases/{html.escape(case_id)}/trace.json">Trace JSON</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a><a href="/ai-review?caseId={html.escape(case_id)}">AI Review</a><a href="/ai-review.json?caseId={html.escape(case_id)}">AI JSON</a></nav>
     {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("No autonomous action", "warn")}
   </header>
   <main>
@@ -275,6 +310,8 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     )
     disclaimers = items(packet["limitations"], "case-safety")
     timeline = timeline_items(packet["evidenceTimeline"])
+    trace = trace_table(packet["ruleTrace"])
+    telemetry = telemetry_table(packet["telemetryTimeline"])
     excursion_html = (
         f'<p data-testid="case-excursion">{fmt_time(excursion["startUtc"])} to {fmt_time(excursion["endUtc"])}. Duration: {excursion["durationMinutes"]} minutes. Zone: {html.escape(excursion["zoneId"])}.</p>'
         if excursion
@@ -342,16 +379,19 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
         "<p>Optional reviewer explanation only. Deterministic rules remain authoritative.</p>"
         f'<div class="toolbar"><a class="button" href="{ai_href}">Open AI review</a><a class="button" href="{ai_json_href}">AI JSON</a></div></section>'
     )
+    trace_href = f"/cases/{html.escape(case_id)}/trace.json"
+    if simulate_resolved:
+        trace_href += "?simulateResolved=true"
     export_panel = (
         f'<section class="panel" data-testid="export-panel"><h2>Export packet</h2>'
         "<p>Markdown and JSON exports contain synthetic review evidence only.</p>"
-        f'<div class="toolbar"><a class="button" href="{evidence_href}">Evidence JSON</a><a class="button" href="{export_href}">Export markdown</a></div></section>'
+        f'<div class="toolbar"><a class="button" href="{trace_href}">Trace JSON</a><a class="button" href="{evidence_href}">Evidence JSON</a><a class="button" href="{export_href}">Export markdown</a></div></section>'
     )
     body = f"""
   <header data-testid="case-review">
     <h1>{html.escape(case["caseTitle"])}</h1>
     <p>{html.escape(case["scenarioSummary"])}</p>
-    <nav><a href="/cases">Cases</a><a href="{evidence_href}">Evidence JSON</a><a href="{export_href}">Export packet</a><a href="{ai_href}">AI Review Assistant</a><a href="{ai_json_href}">AI JSON</a></nav>
+    <nav><a href="/cases">Cases</a><a href="{trace_href}">Trace JSON</a><a href="{evidence_href}">Evidence JSON</a><a href="{export_href}">Export packet</a><a href="{ai_href}">AI Review Assistant</a><a href="{ai_json_href}">AI JSON</a></nav>
     {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("Autonomous actions: false", "warn")}
   </header>
   <main>
@@ -362,7 +402,9 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     </section>
     <section class="panel" data-testid="manual-resolution-panel"><h2>Manual resolution simulation</h2><p>Current unresolved pallet: {html.escape(", ".join(before_packet["result"]["unresolvedPalletIds"]) or "None")}</p><div class="toolbar">{simulation_link}</div></section>
     <section class="panel" data-testid="case-excursion-panel"><h2>Excursion</h2>{excursion_html}</section>
+    <section class="panel" data-testid="synthetic-telemetry-timeline"><h2>Synthetic temperature timeline</h2>{telemetry}</section>
     <section class="panel" data-testid="evidence-timeline"><h2>Evidence timeline</h2><ul>{timeline}</ul></section>
+    <section class="panel" data-testid="rule-trace-panel"><h2>Deterministic Rule Trace</h2>{trace}</section>
     <section class="grid">
       <article class="panel"><h2>Mapped pallet table</h2>{mapped_table}</article>
       <article class="panel status-block"><h2>Unresolved pallet table</h2>{unresolved_table}</article>
@@ -500,6 +542,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         return
                     if parts[2] == "evidence.json":
                         self.respond_json(evidence_json(get_case(selected), simulate_resolved))
+                        return
+                    if parts[2] == "trace.json":
+                        self.respond_json(trace_json(get_case(selected), simulate_resolved))
                         return
                     if parts[2] == "export.md":
                         self.respond_markdown(export_markdown(get_case(selected), simulate_resolved))

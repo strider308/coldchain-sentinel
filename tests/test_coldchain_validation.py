@@ -137,6 +137,7 @@ def test_routes(case: dict[str, Any]) -> None:
         simulated_status, simulated_review = fetch(
             base_url, "/cases/blocked-unresolved-pallet/review?simulateResolved=true"
         )
+        baseline_trace_status, baseline_trace = fetch(base_url, "/cases/blocked-unresolved-pallet/trace.json")
         baseline_evidence_status, baseline_evidence = fetch(base_url, "/cases/blocked-unresolved-pallet/evidence.json")
         baseline_export_status, baseline_export = fetch(base_url, "/cases/blocked-unresolved-pallet/export.md")
         simulated_export_status, simulated_export = fetch(
@@ -157,6 +158,7 @@ def test_routes(case: dict[str, Any]) -> None:
     assert baseline_case_status == 200
     assert baseline_case_review_status == 200
     assert simulated_status == 200
+    assert baseline_trace_status == 200
     assert baseline_evidence_status == 200
     assert baseline_export_status == 200
     assert simulated_export_status == 200
@@ -181,6 +183,8 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "2026-06-26 10:30 UTC" in baseline_case_review
     assert "2026-06-26 11:15 UTC" in baseline_case_review
     assert "Duration: 45 minutes" in baseline_case_review
+    assert "Deterministic Rule Trace" in baseline_case_review
+    assert "Synthetic temperature timeline" in baseline_case_review
     assert "REVIEW_PACKET_COMPLETE" in simulated_review
     assert "MAPPING_REVIEW_SIMULATED" in simulated_review
     assert "PAL-SYN-1004 is synthetically mapped" in simulated_review
@@ -214,9 +218,12 @@ def test_routes(case: dict[str, Any]) -> None:
     assert health == {"ok": True, "providers": "disabled"}
 
     evidence = json.loads(baseline_evidence)
+    trace = json.loads(baseline_trace)
     assert evidence["caseId"] == "blocked-unresolved-pallet"
     assert evidence["result"]["finalDisposition"] == "BLOCKED"
     assert evidence["result"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+    assert trace["result"]["excursion"]["durationMinutes"] == 45
+    assert "TEMP_THRESHOLD_CHECK" in {row["ruleId"] for row in trace["trace"]}
 
 
 def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
@@ -229,6 +236,7 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             case_id = synthetic_case["caseId"]
             detail_status, _ = fetch(base_url, f"/cases/{case_id}")
             review_status, review_page = fetch(base_url, f"/cases/{case_id}/review")
+            trace_status, trace_json = fetch(base_url, f"/cases/{case_id}/trace.json")
             evidence_status, evidence_json = fetch(base_url, f"/cases/{case_id}/evidence.json")
             export_status, export_md = fetch(base_url, f"/cases/{case_id}/export.md")
             ai_status, ai_page = fetch(base_url, f"/ai-review?caseId={case_id}")
@@ -236,19 +244,34 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
 
             assert detail_status == 200
             assert review_status == 200
+            assert trace_status == 200
             assert evidence_status == 200
             assert export_status == 200
             assert ai_status == 200
             assert ai_json_status == 200
             assert "Reviewer checklist" in review_page
             assert "No autonomous operational action." in review_page
+            assert "Deterministic Rule Trace" in review_page
+            assert "Synthetic temperature timeline" in review_page
             assert f"Selected case: {case_id}" in ai_page
             assert "Fireworks may provide an optional non-authoritative reviewer explanation only." in export_md
             assert "quality-gated" in export_md
             assert "No autonomous operational action." in export_md
+            assert "## Deterministic Rule Trace" in export_md
+            assert "## Synthetic Telemetry Summary" in export_md
 
+            trace = json.loads(trace_json)
+            rule_ids = {row["ruleId"] for row in trace["trace"]}
+            assert "TEMP_THRESHOLD_CHECK" in rule_ids
+            assert "PALLET_MAPPING_CHECK" in rule_ids
+            assert "HUMAN_REVIEW_GATE" in rule_ids
+            assert "AUTONOMOUS_ACTION_DENY" in rule_ids
+            assert trace["result"]["autonomousActionsAllowed"] is False
+            assert trace["safetyDisclaimers"]
             evidence = json.loads(evidence_json)
             assert evidence["result"]["autonomousActionsAllowed"] is False
+            assert evidence["telemetryTimeline"]
+            assert evidence["trace"]
             ai_packet = json.loads(ai_json)
             assert ai_packet["deterministicResult"]["autonomousActionsAllowed"] is False
             assert ai_packet["deterministicResult"] == case_packet(get_case(case_id))["result"]
@@ -258,11 +281,18 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
         thread.join(timeout=5)
 
     baseline = case_packet(get_case("blocked-unresolved-pallet"))["result"]
+    baseline_packet = case_packet(get_case("blocked-unresolved-pallet"))
     assert baseline["finalDisposition"] == "BLOCKED"
     assert baseline["reviewStatus"] == "HUMAN_REVIEW_REQUIRED"
+    assert baseline["excursion"]["durationMinutes"] == 45
+    assert baseline["excursion"]["startUtc"] == "2026-06-26T10:30:00Z"
+    assert baseline["excursion"]["endUtc"] == "2026-06-26T11:15:00Z"
+    assert baseline["excursion"]["zoneId"] == "Z1"
     assert baseline["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+    assert "TEMP_THRESHOLD_CHECK" in {row["ruleId"] for row in baseline_packet["ruleTrace"]}
 
     fully_mapped = case_packet(get_case("excursion-fully-mapped"))["result"]
+    assert fully_mapped["excursion"] is not None
     assert fully_mapped["unresolvedPalletIds"] == []
     assert fully_mapped["autonomousActionsAllowed"] is False
 
