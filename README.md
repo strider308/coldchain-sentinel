@@ -136,6 +136,10 @@ http://127.0.0.1:18080/
 - `/data-pipeline.json` - machine-readable pipeline stages.
 - `/model-benchmark` - synthetic benchmark report for advisory model output.
 - `/model-benchmark.json` - benchmark metrics against simple baselines.
+- `/sers-model-card` - SERS intended use, prohibited use, features, outputs, and limitations.
+- `/sers-model-card.json` - machine-readable SERS model governance metadata.
+- `/benchmark-explainability` - synthetic benchmark metrics, comparisons, and failure modes.
+- `/benchmark-explainability.json` - machine-readable benchmark explainability.
 - `/public-data-readiness` - public dataset readiness gate; no datasets are ingested yet.
 - `/cases/blocked-unresolved-pallet` - case detail page.
 - `/cases/blocked-unresolved-pallet/review` - reviewer workspace.
@@ -160,6 +164,10 @@ http://127.0.0.1:18080/
 - `/roadmap` - sustained platform development roadmap.
 
 `/ai-review` and `/ai-review.json` accept an optional `caseId` query parameter for the synthetic cases, for example `/ai-review?caseId=excursion-fully-mapped`.
+
+## Model Governance
+
+SERS is advisory only. `/sers-model-card` documents its intended and prohibited uses, while `/benchmark-explainability` reports measured deterministic synthetic benchmark results against simple baselines. Neither SERS nor Fireworks can change deterministic review facts.
 
 ## Recommended Demo Flow
 
@@ -392,7 +400,9 @@ Phase 4:
 - `docs/CLEANING_PIPELINE.md`
 - `docs/CONSENSUS_ENGINE.md`
 - `docs/SERS_ALGORITHM.md`
+- `docs/SERS_MODEL_CARD.md`
 - `docs/MODEL_BENCHMARKING.md`
+- `docs/BENCHMARK_EXPLAINABILITY.md`
 - `docs/AI_SAFETY_GATE.md`
 - `docs/CLAIMS_BOUNDARY.md`
 - `docs/POST_HACKATHON_ROADMAP.md`

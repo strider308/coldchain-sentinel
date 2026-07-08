@@ -23,3 +23,5 @@ SERS means Sentinel Excursion Risk Score. It is an advisory synthetic beta score
 - `modelVersion`
 
 SERS does not change `finalDisposition`, `reviewStatus`, blockers, pallet mappings, rule trace facts, or `autonomousActionsAllowed`.
+
+See `docs/SERS_MODEL_CARD.md` and `/sers-model-card` for intended use, prohibited use, and limitations.

@@ -15,3 +15,5 @@ Rows are generated in memory from synthetic sensor windows. Features include rol
 ## Claims Boundary
 
 Benchmark wording is limited to deterministic synthetic benchmark data against simple baselines. No real-world superiority, production readiness, or compliance validation is claimed.
+
+See `docs/BENCHMARK_EXPLAINABILITY.md` and `/benchmark-explainability` for metric definitions and known failure modes.

@@ -224,6 +224,10 @@ def test_routes(case: dict[str, Any]) -> None:
         data_pipeline_json_status, data_pipeline_json = fetch(base_url, "/data-pipeline.json")
         model_benchmark_status, model_benchmark = fetch(base_url, "/model-benchmark")
         model_benchmark_json_status, model_benchmark_json = fetch(base_url, "/model-benchmark.json")
+        model_card_status, model_card = fetch(base_url, "/sers-model-card")
+        model_card_json_status, model_card_json = fetch(base_url, "/sers-model-card.json")
+        explainability_status, explainability = fetch(base_url, "/benchmark-explainability")
+        explainability_json_status, explainability_json = fetch(base_url, "/benchmark-explainability.json")
         public_data_status, public_data_page = fetch(base_url, "/public-data-readiness")
         roadmap_status, roadmap_page = fetch(base_url, "/roadmap")
         baseline_case_status, baseline_case = fetch(base_url, "/cases/blocked-unresolved-pallet")
@@ -282,6 +286,10 @@ def test_routes(case: dict[str, Any]) -> None:
     assert data_pipeline_json_status == 200
     assert model_benchmark_status == 200
     assert model_benchmark_json_status == 200
+    assert model_card_status == 200
+    assert model_card_json_status == 200
+    assert explainability_status == 200
+    assert explainability_json_status == 200
     assert public_data_status == 200
     assert roadmap_status == 200
     assert baseline_case_status == 200
@@ -312,6 +320,8 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Redundancy and consensus summary" in command_center
     assert "SERS advisory risk summary" in command_center
     assert "Model benchmark summary" in command_center
+    assert "/sers-model-card" in command_center
+    assert "/benchmark-explainability" in command_center
     assert "Deterministic review packet summary" in command_center
     assert "Fireworks safety-gate summary" in command_center
     assert "Sensor Adapter status" in command_center
@@ -343,6 +353,12 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "vendor_flat_csv_v1" in sensor_adapters
     assert "vendor_nested_iot_v1" in sensor_adapters
     assert "On deterministic synthetic benchmark data only." in model_benchmark
+    assert "/sers-model-card" in model_benchmark
+    assert "/benchmark-explainability" in model_benchmark
+    assert "Advisory only" in model_card
+    assert "Prohibited use" in model_card
+    assert "On deterministic synthetic benchmark data, SERS is compared against simple baselines." in explainability
+    assert "Known failure modes and limitations" in explainability
     assert "No external datasets are ingested" in public_data_page
     assert "not ingested" in public_data_page
     assert "Platform Roadmap" in roadmap_page
@@ -445,6 +461,8 @@ def test_routes(case: dict[str, Any]) -> None:
     adapter_examples = [json.loads(body) for _, body in adapter_example_statuses]
     pipeline_payload = json.loads(data_pipeline_json)
     benchmark_payload = json.loads(model_benchmark_json)
+    model_card_payload = json.loads(model_card_json)
+    explainability_payload = json.loads(explainability_json)
     system_status = json.loads(system_status_json)
     validation_payload = json.loads(validation_json)
     assert evidence["caseId"] == "blocked-unresolved-pallet"
@@ -490,6 +508,12 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "rollingAverageThreshold" in benchmark_payload["baselines"]
     assert "accuracy" in benchmark_payload["metrics"]
     assert "confusionMatrix" in benchmark_payload["metrics"]
+    assert model_card_payload["advisoryOnly"] is True
+    assert model_card_payload["deterministicRulesAuthoritative"] is True
+    assert model_card_payload["autonomousActionsAllowed"] is False
+    assert model_card_payload["realDataUsed"] is False
+    assert explainability_payload["syntheticOnly"] is True
+    assert explainability_payload["productionValidated"] is False
     assert command_payload["appName"] == "ColdChain Sentinel"
     assert command_payload["betaTotalGeneratedReadings"] == 41472
     assert command_payload["fireworksSafetySummary"]["fireworksAuthoritative"] is False
@@ -518,6 +542,9 @@ def test_routes(case: dict[str, Any]) -> None:
     assert system_status["sensorAdaptersAvailable"] is True
     assert system_status["dataContractVersion"] == "v2"
     assert system_status["supportedSyntheticAdapterFormats"] == SUPPORTED_FORMATS
+    assert system_status["sersModelCardAvailable"] is True
+    assert system_status["benchmarkExplainabilityAvailable"] is True
+    assert system_status["sersAdvisoryOnly"] is True
     assert system_status["reviewWorkspaceAvailable"] is True
     assert system_status["betaTotalGeneratedReadings"] == 41472
     assert validation_payload["realDataUsed"] is False

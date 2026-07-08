@@ -256,6 +256,12 @@ def command_center_payload() -> dict[str, Any]:
             "metrics": benchmark["metrics"],
             "baselines": list(benchmark["baselines"].keys()),
         },
+        "modelGovernanceSummary": {
+            "sersModelCardAvailable": True,
+            "benchmarkExplainabilityAvailable": True,
+            "sersModelCard": "/sers-model-card",
+            "benchmarkExplainability": "/benchmark-explainability",
+        },
         "deterministicReviewSummary": {
             "shipmentId": result["shipmentId"],
             "finalDisposition": result["finalDisposition"],
@@ -283,6 +289,8 @@ def command_center_payload() -> dict[str, Any]:
             "cleaningReport": "/cases/blocked-unresolved-pallet/cleaning-report.json",
             "prediction": "/cases/blocked-unresolved-pallet/prediction.json",
             "modelBenchmark": "/model-benchmark",
+            "sersModelCard": "/sers-model-card",
+            "benchmarkExplainability": "/benchmark-explainability",
             "reviewWorkspace": "/cases/blocked-unresolved-pallet/review",
             "ruleTrace": "/cases/blocked-unresolved-pallet/trace.json",
             "auditPacket": "/cases/blocked-unresolved-pallet/audit.md",
@@ -452,6 +460,7 @@ def render_command_center() -> str:
     consensus = payload["consensusSummary"]
     sers = payload["sersSummary"]
     benchmark = payload["benchmarkSummary"]
+    governance = payload["modelGovernanceSummary"]
     review = payload["deterministicReviewSummary"]
     fireworks = payload["fireworksSafetySummary"]
     readiness = payload["readinessSummary"]
@@ -472,6 +481,7 @@ def render_command_center() -> str:
       <article class="panel" data-testid="command-consensus-summary"><h2>Redundancy and consensus summary</h2><p>Sensor trust score: {consensus["sensorTrustScore"]}. Zone consensus score: {consensus["zoneConsensusScore"]}. Consensus label: {html.escape(consensus["consensusLabel"])}.</p><p>Redundancy compares neighboring synthetic sensors so one bad sensor is treated as a review signal, not a final conclusion.</p></article>
       <article class="panel" data-testid="command-sers-summary"><h2>SERS advisory risk summary</h2><p class="metric">{sers["riskScore"]}</p><p>Risk band: {html.escape(sers["riskBand"])}. Prediction horizon: {sers["predictionHorizonMinutes"]} minutes.</p><ul>{factors}</ul><p>Advisory only; predictions do not alter deterministic review facts.</p><div class="toolbar"><a class="button" href="/cases/blocked-unresolved-pallet/prediction.json">Prediction JSON</a></div></article>
       <article class="panel" data-testid="command-benchmark-summary"><h2>Model benchmark summary</h2><p>{html.escape(benchmark["benchmarkScope"])}</p><p>Training rows: {benchmark["trainingRows"]}. Test rows: {benchmark["testRows"]}. Accuracy: {benchmark["metrics"]["accuracy"]}. Compared baselines: {html.escape(", ".join(benchmark["baselines"]))}.</p><p>Benchmarked on deterministic synthetic data against simple baselines.</p><div class="toolbar"><a class="button" href="/model-benchmark">Benchmark</a><a class="button" href="/model-benchmark.json">Benchmark JSON</a></div></article>
+      <article class="panel" data-testid="command-model-governance"><h2>Model governance</h2><p>SERS Model Card and Benchmark Explainability are available for the synthetic advisory model.</p><p>SERS advisory only: true. Deterministic rules authoritative: true.</p><div class="toolbar"><a class="button" href="{html.escape(governance["sersModelCard"])}">SERS Model Card</a><a class="button" href="{html.escape(governance["benchmarkExplainability"])}">Benchmark Explainability</a></div></article>
       <article class="panel status-block" data-testid="command-review-summary"><h2>Deterministic review packet summary</h2><p>Shipment ID: {html.escape(review["shipmentId"])}. finalDisposition: {html.escape(review["finalDisposition"])}. reviewStatus: {html.escape(review["reviewStatus"])}.</p><p>Unresolved pallet IDs: {html.escape(", ".join(review["unresolvedPalletIds"]) or "None")}. autonomousActionsAllowed: {str(review["autonomousActionsAllowed"]).lower()}.</p><ul>{blockers}</ul><div class="toolbar"><a class="button" href="/cases/blocked-unresolved-pallet/review">Review</a><a class="button" href="/cases/blocked-unresolved-pallet/trace.json">Trace JSON</a><a class="button" href="/cases/blocked-unresolved-pallet/audit.md">Audit packet</a></div></article>
       <article class="panel" data-testid="command-fireworks-summary"><h2>Fireworks safety-gate summary</h2><p>Fireworks configured: {str(fireworks["fireworksConfigured"]).lower()}. Fireworks authoritative: false.</p><p>Model output is validated, sanitized, or rejected. Deterministic fallback remains authoritative.</p><div class="toolbar"><a class="button" href="/ai-review">AI Review</a><a class="button" href="/ai-review.json">AI JSON</a></div></article>
       <article class="panel status-block" data-testid="command-readiness-summary"><h2>Readiness and safety summary</h2><p>No real data: {str(not readiness["realDataUsed"]).lower()}. No autonomous operational actions: {str(not readiness["autonomousActionsAllowed"]).lower()}. Not production/compliance validated: {str(not readiness["productionValidated"]).lower()}.</p><p>Synthetic hackathon/investor beta. Deterministic rules remain authoritative.</p><div class="toolbar"><a class="button" href="/beta-readiness">Beta Readiness</a><a class="button" href="/system-status.json">System Status</a><a class="button" href="/public-data-readiness">Public Data Readiness</a></div></article>
@@ -625,6 +635,9 @@ def system_status_json() -> dict[str, Any]:
         "sensorAdaptersAvailable": True,
         "dataContractVersion": "v2",
         "supportedSyntheticAdapterFormats": adapter_summary()["supportedSyntheticAdapterFormats"],
+        "sersModelCardAvailable": True,
+        "benchmarkExplainabilityAvailable": True,
+        "sersAdvisoryOnly": True,
         "betaTotalGeneratedReadings": totals["betaTotalGeneratedReadings"],
         "deterministicEngineAvailable": True,
         "rulesTraceAvailable": True,
@@ -762,6 +775,9 @@ def render_roadmap() -> str:
             ["DuckDB/Polars analytics", "Local analytical processing evaluation", "planned"],
             ["TimescaleDB evaluation", "Time-series persistence evaluation", "planned"],
             ["MLflow/Evidently evaluation", "Experiment and drift reporting evaluation", "planned"],
+            ["Public data calibration", "Real dataset benchmark branch after license/TOS/provenance review", "planned"],
+            ["Model monitoring", "Drift, calibration, and model-card updates after real-world evaluation", "planned"],
+            ["Pilot calibration", "No production validation until real-world evaluation is complete", "future"],
             ["Pilot readiness", "Customer-specific pilots after legal/compliance review", "future"],
         ],
         "roadmap-table",
@@ -861,6 +877,163 @@ def render_sensor_adapters() -> str:
     return page("ColdChain Sentinel Sensor Adapters", body)
 
 
+def sers_model_card_json() -> dict[str, Any]:
+    benchmark = model_benchmark_json()
+    return {
+        "modelName": "Sentinel Excursion Risk Score",
+        "modelShortName": "SERS",
+        "modelVersion": "SERS-0.1-synthetic",
+        "mode": "deterministic_synthetic_beta_only",
+        "predictionTarget": "Advisory risk of near-future threshold breach or review escalation.",
+        "predictionHorizonMinutes": benchmark["model"]["predictionHorizonMinutes"],
+        "featureGroups": [
+            "temperature distance to threshold",
+            "rolling temperature slope",
+            "rolling max/mean",
+            "humidity trend",
+            "door-open events",
+            "dropout/outlier/duplicate counts",
+            "battery/signal quality",
+            "zone consensus score",
+            "unresolved pallet penalty",
+            "evidence completeness",
+        ],
+        "outputs": ["riskScore", "riskBand", "confidenceLabel", "topContributingFactors"],
+        "intendedUse": [
+            "help reviewers prioritize inspection",
+            "explain why risk is rising",
+            "support audit packet context",
+        ],
+        "prohibitedUse": [
+            "not for autonomous release, quarantine, discard, reroute, or customer notification",
+            "not production validated",
+            "not pharma/compliance certified",
+        ],
+        "trainingDataSummary": {
+            "source": "deterministic synthetic sensor windows",
+            "trainingRows": benchmark["model"]["trainingRows"],
+            "testRows": benchmark["model"]["testRows"],
+            "realDataUsed": False,
+        },
+        "benchmarkSummary": {
+            "scope": benchmark["benchmarkScope"],
+            "baselines": list(benchmark["baselines"].keys()),
+            "metrics": benchmark["metrics"],
+        },
+        "limitations": [
+            "trained and evaluated on synthetic data",
+            "public or real data ingestion deferred pending license/TOS/provenance review",
+            "needs calibration against real sensor/vendor data before pilots",
+        ],
+        "safetyDisclaimers": [
+            "SERS is advisory only.",
+            "Deterministic rules remain authoritative.",
+            "No autonomous operational action.",
+            "No production, pharma, or compliance validation.",
+        ],
+        "advisoryOnly": True,
+        "deterministicRulesAuthoritative": True,
+        "autonomousActionsAllowed": False,
+        "realDataUsed": False,
+        "productionValidated": False,
+    }
+
+
+def render_sers_model_card() -> str:
+    card = sers_model_card_json()
+    body = f"""
+  <header data-testid="sers-model-card-page">
+    {global_nav()}
+    <h1>SERS Model Card</h1>
+    <p>{html.escape(card["modelName"])} ({html.escape(card["modelShortName"])}) version {html.escape(card["modelVersion"])}.</p>
+    {badge("Advisory only", "warn")}{badge("Synthetic beta only", "warn")}{badge("Deterministic rules authoritative", "good")}
+  </header>
+  <main>
+    <section class="grid">
+      <article class="panel"><h2>Prediction target</h2><p>{html.escape(card["predictionTarget"])}</p><p>Horizon: {card["predictionHorizonMinutes"]} minutes. Supported mode: deterministic synthetic beta only.</p></article>
+      <article class="panel"><h2>Outputs</h2><ul>{items(card["outputs"], "sers-output")}</ul></article>
+      <article class="panel"><h2>Input feature groups</h2><ul>{items(card["featureGroups"], "sers-feature")}</ul></article>
+      <article class="panel"><h2>Intended use</h2><ul>{items(card["intendedUse"], "sers-use")}</ul></article>
+      <article class="panel status-block"><h2>Prohibited use</h2><ul>{items(card["prohibitedUse"], "sers-prohibited")}</ul></article>
+      <article class="panel status-block"><h2>Known limitations</h2><ul>{items(card["limitations"], "sers-limitation")}</ul></article>
+    </section>
+    <section class="panel"><div class="toolbar"><a class="button" href="/sers-model-card.json">Model card JSON</a><a class="button" href="/benchmark-explainability">Benchmark Explainability</a><a class="button" href="/model-benchmark">Model Benchmark</a></div></section>
+  </main>
+"""
+    return page("ColdChain Sentinel SERS Model Card", body)
+
+
+def benchmark_explainability_json() -> dict[str, Any]:
+    benchmark = model_benchmark_json()
+    return {
+        "benchmarkMode": "On deterministic synthetic benchmark data, SERS is compared against simple baselines.",
+        "datasetSummary": {
+            "trainingRows": benchmark["model"]["trainingRows"],
+            "testRows": benchmark["model"]["testRows"],
+            "predictionHorizonMinutes": benchmark["model"]["predictionHorizonMinutes"],
+            "features": benchmark["model"]["features"],
+        },
+        "baselineComparisons": {
+            "SERS/model": benchmark["metrics"],
+            "current-temperature threshold": benchmark["baselines"]["naiveCurrentTemperatureThreshold"],
+            "rolling-average threshold": benchmark["baselines"]["rollingAverageThreshold"],
+        },
+        "metricDefinitions": {
+            "accuracy": "share of synthetic test windows classified correctly",
+            "precision": "share of predicted positive synthetic windows that were positive",
+            "recall": "share of positive synthetic windows found by the model",
+            "false positives": "synthetic windows flagged without a future breach label",
+            "false negatives": "synthetic future breach windows missed",
+            "confusion matrix": "true/false positives and true/false negatives",
+        },
+        "strengths": [
+            "combines temperature, quality, consensus, door, and unresolved-pallet signals",
+            "shows contributing factors for reviewer context",
+            "keeps deterministic review facts unchanged",
+        ],
+        "knownFailureModes": [
+            "synthetic labels may not match real vendor behavior",
+            "low positive-label counts can make precision or recall uninformative",
+            "sensor/vendor calibration is needed before pilots",
+        ],
+        "claimsBoundary": benchmark["claimsBoundary"],
+        "syntheticOnly": True,
+        "realDataUsed": False,
+        "productionValidated": False,
+    }
+
+
+def render_benchmark_explainability() -> str:
+    payload = benchmark_explainability_json()
+    rows = []
+    for name, metrics in payload["baselineComparisons"].items():
+        rows.append([
+            name,
+            str(metrics["accuracy"]),
+            str(metrics["precision"]),
+            str(metrics["recall"]),
+            str(metrics["falsePositives"]),
+            str(metrics["falseNegatives"]),
+            json.dumps(metrics["confusionMatrix"], sort_keys=True),
+        ])
+    body = f"""
+  <header data-testid="benchmark-explainability-page">
+    {global_nav()}
+    <h1>Benchmark Explainability</h1>
+    <p>On deterministic synthetic benchmark data, SERS is compared against simple baselines.</p>
+    {badge("Synthetic only", "warn")}{badge("No real-world superiority claim", "warn")}
+  </header>
+  <main>
+    <section class="panel"><h2>Dataset summary</h2><p>Training rows: {payload["datasetSummary"]["trainingRows"]}. Test rows: {payload["datasetSummary"]["testRows"]}. Horizon: {payload["datasetSummary"]["predictionHorizonMinutes"]} minutes.</p></section>
+    <section class="panel"><h2>Metrics</h2>{table(["Method", "Accuracy", "Precision", "Recall", "False positives", "False negatives", "Confusion matrix"], rows, "benchmark-explainability-table")}</section>
+    <section class="panel"><h2>What SERS adds on synthetic data</h2><ul>{items(payload["strengths"], "benchmark-strength")}</ul><p>Measured differences are shown above; no advantage is claimed when metrics do not support it.</p></section>
+    <section class="panel status-block"><h2>Known failure modes and limitations</h2><ul>{items(payload["knownFailureModes"], "benchmark-failure")}</ul><p>{html.escape(payload["claimsBoundary"])}</p></section>
+    <section class="panel"><div class="toolbar"><a class="button" href="/benchmark-explainability.json">Explainability JSON</a><a class="button" href="/model-benchmark">Model Benchmark</a><a class="button" href="/model-benchmark.json">Benchmark JSON</a><a class="button" href="/sers-model-card">SERS Model Card</a></div></section>
+  </main>
+"""
+    return page("ColdChain Sentinel Benchmark Explainability", body)
+
+
 def data_pipeline_json() -> dict[str, Any]:
     return {
         "syntheticOnly": True,
@@ -923,6 +1096,7 @@ def render_model_benchmark() -> str:
     <section class="panel"><h2>Model</h2><p>{html.escape(benchmark["model"]["modelName"])}. Training rows: {benchmark["model"]["trainingRows"]}. Test rows: {benchmark["model"]["testRows"]}. Horizon: {benchmark["model"]["predictionHorizonMinutes"]} minutes.</p>{table(["Model", "Accuracy", "Precision", "Recall"], metric_rows, "model-metrics")}</section>
     <section class="panel"><h2>Simple baselines</h2>{table(["Baseline", "Accuracy", "Precision", "Recall"], baseline_rows, "baseline-metrics")}</section>
     <section class="panel status-block"><h2>Claims boundary</h2><p>{html.escape(benchmark["claimsBoundary"])}</p></section>
+    <section class="panel"><h2>Model governance</h2><div class="toolbar"><a class="button" href="/sers-model-card">SERS Model Card</a><a class="button" href="/benchmark-explainability">Benchmark Explainability</a></div></section>
   </main>
 """
     return page("ColdChain Sentinel Model Benchmark", body)
@@ -1346,6 +1520,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/model-benchmark.json":
             self.respond_json(model_benchmark_json())
+            return
+        if path == "/sers-model-card":
+            self.respond_text(render_sers_model_card())
+            return
+        if path == "/sers-model-card.json":
+            self.respond_json(sers_model_card_json())
+            return
+        if path == "/benchmark-explainability":
+            self.respond_text(render_benchmark_explainability())
+            return
+        if path == "/benchmark-explainability.json":
+            self.respond_json(benchmark_explainability_json())
             return
         if path == "/public-data-readiness":
             self.respond_text(render_public_data_readiness())
