@@ -45,8 +45,8 @@ def case_result(case: dict[str, Any], simulate_resolved: bool = False) -> dict[s
         mapped = sorted(set(mapped + unresolved))
         unresolved = []
         blockers = [blocker for blocker in blockers if blocker != "UNRESOLVED_PALLET_MAPPING"]
-        review_status = "MAPPING_REVIEW_SIMULATED"
-        final_disposition = "REVIEW_PACKET_COMPLETE"
+        review_status = "REVIEW_PACKET_COMPLETE"
+        final_disposition = "MAPPING_REVIEW_SIMULATED"
 
     return {
         "shipmentId": case["shipmentId"],
@@ -141,6 +141,24 @@ def export_markdown(case: dict[str, Any], simulate_resolved: bool = False) -> st
     def bullet(values: list[str]) -> str:
         return "\n".join(f"- {value}" for value in values) or "- None"
 
+    simulation_section = []
+    if simulate_resolved and case["caseId"] == BASELINE_CASE_ID:
+        before = case_result(case)
+        simulation_section = [
+            "",
+            "## Simulated Resolution",
+            "- Simulation: PAL-SYN-1004 synthetically mapped for review packet completion.",
+            f'- Before unresolvedPalletIds: {", ".join(before["unresolvedPalletIds"]) or "None"}',
+            f'- Before finalDisposition: {before["finalDisposition"]}',
+            f'- Before reviewStatus: {before["reviewStatus"]}',
+            f'- After unresolvedPalletIds: {", ".join(result["unresolvedPalletIds"]) or "None"}',
+            f'- After finalDisposition: {result["finalDisposition"]}',
+            f'- After reviewStatus: {result["reviewStatus"]}',
+            f'- After autonomousActionsAllowed: {str(result["autonomousActionsAllowed"]).lower()}',
+            "- This completes a synthetic review packet only and does not authorize any operational action.",
+        ]
+
+    timeline_lines = [f'- {row["time"]}: {row["event"]}' for row in packet["evidenceTimeline"]]
     return "\n".join(
         [
             f'# {packet["caseTitle"]}',
@@ -156,14 +174,19 @@ def export_markdown(case: dict[str, Any], simulate_resolved: bool = False) -> st
             f'- reviewStatus: {result["reviewStatus"]}',
             f'- autonomousActionsAllowed: {str(result["autonomousActionsAllowed"]).lower()}',
             "",
+            "## Evidence Timeline",
+            *timeline_lines,
+            "",
             "## Reviewer Checklist",
             bullet(packet["reviewerChecklist"]),
             "",
             "## Fireworks Assistant Role",
             "Fireworks may provide an optional non-authoritative reviewer explanation only. Deterministic rules remain authoritative.",
+            "Fireworks output is quality-gated; rejected, malformed, unsafe, or low-quality output falls back to deterministic text.",
             "",
             "## Safety Disclaimers",
             bullet(packet["limitations"]),
+            *simulation_section,
             "",
         ]
     )

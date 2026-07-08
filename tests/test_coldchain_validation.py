@@ -134,8 +134,14 @@ def test_routes(case: dict[str, Any]) -> None:
         cases_status, cases_page = fetch(base_url, "/cases")
         baseline_case_status, baseline_case = fetch(base_url, "/cases/blocked-unresolved-pallet")
         baseline_case_review_status, baseline_case_review = fetch(base_url, "/cases/blocked-unresolved-pallet/review")
+        simulated_status, simulated_review = fetch(
+            base_url, "/cases/blocked-unresolved-pallet/review?simulateResolved=true"
+        )
         baseline_evidence_status, baseline_evidence = fetch(base_url, "/cases/blocked-unresolved-pallet/evidence.json")
         baseline_export_status, baseline_export = fetch(base_url, "/cases/blocked-unresolved-pallet/export.md")
+        simulated_export_status, simulated_export = fetch(
+            base_url, "/cases/blocked-unresolved-pallet/export.md?simulateResolved=true"
+        )
         health_status, health_json = fetch(base_url, "/health")
     finally:
         server.shutdown()
@@ -150,8 +156,10 @@ def test_routes(case: dict[str, Any]) -> None:
     assert cases_status == 200
     assert baseline_case_status == 200
     assert baseline_case_review_status == 200
+    assert simulated_status == 200
     assert baseline_evidence_status == 200
     assert baseline_export_status == 200
+    assert simulated_export_status == 200
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
     assert "Final disposition blocked." in review
@@ -160,12 +168,31 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Displayed brief source: deterministic_fallback" in ai_review
     assert "AI-assisted explanation only." in ai_review
     assert "Synthetic Case Workspace" in cases_page
+    for case_id in ("blocked-unresolved-pallet", "excursion-fully-mapped", "no-excursion-control"):
+        assert case_id in cases_page
+    assert cases_page.count("<td>false</td>") >= 3
     assert "Blocked excursion with unresolved pallet" in baseline_case
     assert "Reviewer checklist" in baseline_case_review
+    assert "0/4 reviewed" in baseline_case_review
+    assert "localStorage" in baseline_case_review
+    assert "Simulate resolving missing mapping" in baseline_case_review
+    assert "/ai-review?caseId=blocked-unresolved-pallet" in baseline_case_review
+    assert "/ai-review.json?caseId=blocked-unresolved-pallet" in baseline_case_review
     assert "2026-06-26 10:30 UTC" in baseline_case_review
     assert "2026-06-26 11:15 UTC" in baseline_case_review
     assert "Duration: 45 minutes" in baseline_case_review
+    assert "REVIEW_PACKET_COMPLETE" in simulated_review
+    assert "MAPPING_REVIEW_SIMULATED" in simulated_review
+    assert "PAL-SYN-1004 is synthetically mapped" in simulated_review
+    assert "This is a synthetic review packet completion, not shipment approval." in simulated_review
+    simulated_lower = simulated_review.lower()
+    for forbidden in ("approved", "released", "safe for distribution", "compliant", "certified"):
+        assert forbidden not in simulated_lower
     assert "Synthetic demo data only." in baseline_export
+    assert "## Evidence Timeline" in baseline_export
+    assert "## Safety Disclaimers" in baseline_export
+    assert "## Simulated Resolution" in simulated_export
+    assert "After reviewStatus: REVIEW_PACKET_COMPLETE" in simulated_export
 
     packet = json.loads(review_json)
     assert packet == build_review_packet(case)
@@ -204,7 +231,7 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             review_status, review_page = fetch(base_url, f"/cases/{case_id}/review")
             evidence_status, evidence_json = fetch(base_url, f"/cases/{case_id}/evidence.json")
             export_status, export_md = fetch(base_url, f"/cases/{case_id}/export.md")
-            ai_status, _ = fetch(base_url, f"/ai-review?caseId={case_id}")
+            ai_status, ai_page = fetch(base_url, f"/ai-review?caseId={case_id}")
             ai_json_status, ai_json = fetch(base_url, f"/ai-review.json?caseId={case_id}")
 
             assert detail_status == 200
@@ -215,7 +242,9 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert ai_json_status == 200
             assert "Reviewer checklist" in review_page
             assert "No autonomous operational action." in review_page
+            assert f"Selected case: {case_id}" in ai_page
             assert "Fireworks may provide an optional non-authoritative reviewer explanation only." in export_md
+            assert "quality-gated" in export_md
             assert "No autonomous operational action." in export_md
 
             evidence = json.loads(evidence_json)
@@ -241,11 +270,12 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
     assert control["excursion"] is None
     assert control["autonomousActionsAllowed"] is False
     assert "RELEASE" not in control["finalDisposition"]
+    assert "APPROVAL" not in control["finalDisposition"]
 
     simulated = case_packet(get_case("blocked-unresolved-pallet"), simulate_resolved=True)["result"]
     assert simulated["unresolvedPalletIds"] == []
-    assert simulated["reviewStatus"] == "MAPPING_REVIEW_SIMULATED"
-    assert simulated["finalDisposition"] == "REVIEW_PACKET_COMPLETE"
+    assert simulated["reviewStatus"] == "REVIEW_PACKET_COMPLETE"
+    assert simulated["finalDisposition"] == "MAPPING_REVIEW_SIMULATED"
     assert simulated["autonomousActionsAllowed"] is False
 
 

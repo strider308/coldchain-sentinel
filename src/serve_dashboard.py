@@ -38,6 +38,14 @@ def timeline_items(values: list[dict[str, str]]) -> str:
     )
 
 
+def table(headers: list[str], rows: list[list[str]], testid: str) -> str:
+    head = "".join(f"<th>{html.escape(header)}</th>" for header in headers)
+    body = "\n".join(
+        "<tr>" + "".join(f"<td>{html.escape(value)}</td>" for value in row) + "</tr>" for row in rows
+    )
+    return f'<table data-testid="{html.escape(testid)}"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
+
+
 def page(title: str, body: str) -> str:
     return f"""<!doctype html>
 <html lang="en">
@@ -77,6 +85,12 @@ def page(title: str, body: str) -> str:
     .timeline {{ display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }}
     .line {{ height: 3px; background: var(--line); }}
     .button {{ display: inline-block; border: 1px solid var(--accent); border-radius: 6px; padding: 8px 12px; color: #fff; background: var(--accent); text-decoration: none; font-weight: 700; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
+    th, td {{ text-align: left; border-bottom: 1px solid var(--line); padding: 8px 6px; vertical-align: top; }}
+    th {{ color: var(--muted); font-size: 13px; }}
+    .toolbar {{ display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }}
+    .check-row {{ display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }}
+    .check-row input {{ margin-top: 4px; }}
   </style>
 </head>
 <body>{body}</body>
@@ -156,16 +170,39 @@ def render_dashboard(case: dict[str, Any] | None = None) -> str:
 
 
 def render_cases() -> str:
+    cases = load_cases()
     cards = "\n".join(
         f"""
       <article class="panel" data-testid="case-{html.escape(case["caseId"])}">
         <h2>{html.escape(case["caseTitle"])}</h2>
         <p>{html.escape(case["scenarioSummary"])}</p>
         {badge(case["reviewStatus"], "warn")}{badge(case["finalDisposition"], "danger" if case["finalDisposition"] == "BLOCKED" else "warn")}
-        <p><a class="button" href="/cases/{html.escape(case["caseId"])}">Open case</a></p>
+        <p>Blockers: {len(case["blockers"])}. Unresolved pallets: {len(case["unresolvedPalletIds"])}.</p>
+        <div class="toolbar">
+          <a class="button" href="/cases/{html.escape(case["caseId"])}">Open case</a>
+          <a class="button" href="/cases/{html.escape(case["caseId"])}/review">Review workspace</a>
+          <a class="button" href="/cases/{html.escape(case["caseId"])}/evidence.json">Evidence JSON</a>
+          <a class="button" href="/cases/{html.escape(case["caseId"])}/export.md">Export</a>
+          <a class="button" href="/ai-review?caseId={html.escape(case["caseId"])}">Fireworks brief</a>
+        </div>
       </article>
 """
-        for case in load_cases()
+        for case in cases
+    )
+    comparison = table(
+        ["Case", "Excursion?", "Pallet mapping complete?", "Human review?", "Autonomous actions allowed?", "Demo-only limitation"],
+        [
+            [
+                case["caseId"],
+                "yes" if case["excursion"] else "no",
+                "yes" if not case["unresolvedPalletIds"] else "no",
+                "yes" if "HUMAN_REVIEW" in case["reviewStatus"] or "REVIEW" in case["reviewStatus"] else "yes",
+                str(case["autonomousActionsAllowed"]).lower(),
+                "Synthetic only; no operational action.",
+            ]
+            for case in cases
+        ],
+        "case-comparison",
     )
     body = f"""
   <header data-testid="cases-page">
@@ -173,7 +210,10 @@ def render_cases() -> str:
     <p>Synthetic demo data only. No operational action is authorized.</p>
     <nav><a href="/">Dashboard</a><a href="/cases">Cases</a><a href="/review">Baseline review</a></nav>
   </header>
-  <main><section class="grid" aria-label="Synthetic cases">{cards}</section></main>
+  <main>
+    <section class="grid" aria-label="Synthetic cases">{cards}</section>
+    <section class="panel" data-testid="scenario-comparison"><h2>Scenario comparison</h2>{comparison}</section>
+  </main>
 """
     return page("ColdChain Sentinel Cases", body)
 
@@ -186,7 +226,7 @@ def render_case_detail(case_id: str) -> str:
   <header data-testid="case-detail">
     <h1>{html.escape(case["caseTitle"])}</h1>
     <p>{html.escape(case["scenarioSummary"])}</p>
-    <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/review">Reviewer workspace</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a></nav>
+    <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/review">Reviewer workspace</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a><a href="/ai-review?caseId={html.escape(case_id)}">AI Review</a><a href="/ai-review.json?caseId={html.escape(case_id)}">AI JSON</a></nav>
     {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("No autonomous action", "warn")}
   </header>
   <main>
@@ -204,12 +244,35 @@ def render_case_detail(case_id: str) -> str:
 def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     case = get_case(case_id)
     packet = case_packet(case, simulate_resolved)
+    before_packet = case_packet(case)
     result = packet["result"]
     excursion = result["excursion"]
-    mapped = items(result["mappedPalletIds"], "case-mapped")
-    unresolved = items(result["unresolvedPalletIds"] or ["None"], "case-unresolved")
-    blockers = items(result["blockers"] or ["None"], "case-blocker")
-    checklist = items(packet["reviewerChecklist"], "case-check")
+    mapped_table = table(
+        ["Pallet", "Mapping state"],
+        [[pallet_id, "synthetically mapped"] for pallet_id in result["mappedPalletIds"]],
+        "mapped-pallet-table",
+    )
+    unresolved_table = table(
+        ["Pallet", "Review state"],
+        [[pallet_id, "missing synthetic zone mapping"] for pallet_id in result["unresolvedPalletIds"]]
+        or [["None", "no unresolved synthetic pallet mapping"]],
+        "unresolved-pallet-table",
+    )
+    blocker_table = table(
+        ["Blocker", "Meaning"],
+        [[blocker, blocker.replace("_", " ").title()] for blocker in result["blockers"]]
+        or [["None", "review packet completion simulated"]],
+        "blocker-table",
+    )
+    checklist = "\n".join(
+        f"""
+        <label class="check-row">
+          <input type="checkbox" data-check-index="{index}">
+          <span>{html.escape(item)}</span>
+        </label>
+"""
+        for index, item in enumerate(packet["reviewerChecklist"])
+    )
     disclaimers = items(packet["limitations"], "case-safety")
     timeline = timeline_items(packet["evidenceTimeline"])
     excursion_html = (
@@ -217,37 +280,100 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
         if excursion
         else '<p data-testid="case-excursion">No temperature excursion in this synthetic control fixture.</p>'
     )
-    sim_note = (
-        '<p data-testid="simulated-resolution">Synthetic mapping resolution simulated for PAL-SYN-1004. No operational action is authorized.</p>'
-        if simulate_resolved
+    can_simulate = case_id == "blocked-unresolved-pallet" and not simulate_resolved
+    simulation_link = (
+        f'<a class="button" href="/cases/{html.escape(case_id)}/review?simulateResolved=true">Simulate resolving missing mapping</a>'
+        if can_simulate
         else ""
     )
+    sim_note = ""
+    comparison = ""
+    if simulate_resolved and case_id == "blocked-unresolved-pallet":
+        before = before_packet["result"]
+        comparison = table(
+            ["Field", "Before", "After simulation"],
+            [
+                ["unresolvedPalletIds", ", ".join(before["unresolvedPalletIds"]), "None; PAL-SYN-1004 synthetically mapped"],
+                ["finalDisposition", before["finalDisposition"], result["finalDisposition"]],
+                ["reviewStatus", before["reviewStatus"], result["reviewStatus"]],
+                ["autonomousActionsAllowed", str(before["autonomousActionsAllowed"]).lower(), str(result["autonomousActionsAllowed"]).lower()],
+            ],
+            "simulation-comparison",
+        )
+        sim_note = (
+            '<section class="panel status-block" data-testid="simulated-resolution">'
+            "<h2>Simulated mapping resolution</h2>"
+            "<p>PAL-SYN-1004 is synthetically mapped for review packet completion.</p>"
+            "<p>This is a synthetic review packet completion, not shipment approval.</p>"
+            f"{comparison}</section>"
+        )
+    checklist_count = len(packet["reviewerChecklist"])
+    checklist_script = f"""
+  <script>
+    (() => {{
+      const key = "coldchain-checklist:{html.escape(case_id)}";
+      const boxes = Array.from(document.querySelectorAll("[data-check-index]"));
+      const progress = document.querySelector("[data-check-progress]");
+      const saved = JSON.parse(localStorage.getItem(key) || "{{}}");
+      function render() {{
+        const reviewed = boxes.filter((box) => box.checked).length;
+        progress.textContent = reviewed + "/{checklist_count} reviewed";
+        const state = Object.fromEntries(boxes.map((box) => [box.dataset.checkIndex, box.checked]));
+        localStorage.setItem(key, JSON.stringify(state));
+      }}
+      boxes.forEach((box) => {{
+        box.checked = Boolean(saved[box.dataset.checkIndex]);
+        box.addEventListener("change", render);
+      }});
+      render();
+    }})();
+  </script>
+"""
     ai_href = f"/ai-review?caseId={html.escape(case_id)}"
+    ai_json_href = f"/ai-review.json?caseId={html.escape(case_id)}"
+    export_href = f"/cases/{html.escape(case_id)}/export.md"
+    if simulate_resolved:
+        export_href += "?simulateResolved=true"
+    evidence_href = f"/cases/{html.escape(case_id)}/evidence.json"
+    if simulate_resolved:
+        evidence_href += "?simulateResolved=true"
+    fireworks_panel = (
+        f'<section class="panel" data-testid="fireworks-panel"><h2>Fireworks assistant</h2>'
+        "<p>Optional reviewer explanation only. Deterministic rules remain authoritative.</p>"
+        f'<div class="toolbar"><a class="button" href="{ai_href}">Open AI review</a><a class="button" href="{ai_json_href}">AI JSON</a></div></section>'
+    )
+    export_panel = (
+        f'<section class="panel" data-testid="export-panel"><h2>Export packet</h2>'
+        "<p>Markdown and JSON exports contain synthetic review evidence only.</p>"
+        f'<div class="toolbar"><a class="button" href="{evidence_href}">Evidence JSON</a><a class="button" href="{export_href}">Export markdown</a></div></section>'
+    )
     body = f"""
   <header data-testid="case-review">
     <h1>{html.escape(case["caseTitle"])}</h1>
     <p>{html.escape(case["scenarioSummary"])}</p>
-    <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a><a href="{ai_href}">AI Review Assistant</a></nav>
+    <nav><a href="/cases">Cases</a><a href="{evidence_href}">Evidence JSON</a><a href="{export_href}">Export packet</a><a href="{ai_href}">AI Review Assistant</a><a href="{ai_json_href}">AI JSON</a></nav>
     {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("Autonomous actions: false", "warn")}
   </header>
   <main>
     {sim_note}
-    <section class="grid">
-      <article class="panel"><h2>Shipment ID</h2><p class="metric">{html.escape(result["shipmentId"])}</p></article>
-      <article class="panel"><h2>Review status</h2><p>{html.escape(result["reviewStatus"])}</p></article>
-      <article class="panel"><h2>Final disposition</h2><p>{html.escape(result["finalDisposition"])}</p></article>
-      <article class="panel status-block"><h2>Autonomous action status</h2><p>{str(result["autonomousActionsAllowed"]).lower()}</p></article>
+    <section class="grid" data-testid="case-header">
+      <article class="panel"><h2>Shipment facts</h2><p class="metric">{html.escape(result["shipmentId"])}</p><p>Case ID: {html.escape(case_id)}</p></article>
+      <article class="panel status-block" data-testid="deterministic-status-card"><h2>Deterministic status</h2><p>finalDisposition: {html.escape(result["finalDisposition"])}</p><p>reviewStatus: {html.escape(result["reviewStatus"])}</p><p>autonomousActionsAllowed: {str(result["autonomousActionsAllowed"]).lower()}</p></article>
     </section>
+    <section class="panel" data-testid="manual-resolution-panel"><h2>Manual resolution simulation</h2><p>Current unresolved pallet: {html.escape(", ".join(before_packet["result"]["unresolvedPalletIds"]) or "None")}</p><div class="toolbar">{simulation_link}</div></section>
     <section class="panel" data-testid="case-excursion-panel"><h2>Excursion</h2>{excursion_html}</section>
     <section class="panel" data-testid="evidence-timeline"><h2>Evidence timeline</h2><ul>{timeline}</ul></section>
     <section class="grid">
-      <article class="panel"><h2>Mapped pallets</h2><ul>{mapped}</ul></article>
-      <article class="panel status-block"><h2>Unresolved pallets</h2><ul>{unresolved}</ul></article>
-      <article class="panel status-block"><h2>Blockers</h2><ul>{blockers}</ul></article>
-      <article class="panel"><h2>Reviewer checklist</h2><ul>{checklist}</ul></article>
+      <article class="panel"><h2>Mapped pallet table</h2>{mapped_table}</article>
+      <article class="panel status-block"><h2>Unresolved pallet table</h2>{unresolved_table}</article>
+      <article class="panel status-block"><h2>Blocker explanation</h2>{blocker_table}</article>
+      <article class="panel" data-testid="reviewer-checklist-workspace"><h2>Reviewer checklist</h2><p data-check-progress>0/{checklist_count} reviewed</p>{checklist}</article>
+      {fireworks_panel}
+      {export_panel}
       <article class="panel status-block"><h2>Safety disclaimers</h2><ul>{disclaimers}</ul></article>
     </section>
   </main>
+  {checklist_script}
 """
     return page(f"{case['caseTitle']} Review", body)
 
@@ -308,10 +434,12 @@ def render_ai_review(case: dict[str, Any] | None = None, case_id: str | None = N
         if source == "sanitized_fireworks_text"
         else ""
     )
+    case_identity = f'<p data-testid="ai-selected-case">Selected case: {html.escape(packet.get("caseId", "baseline"))} - {html.escape(packet.get("caseTitle", "Baseline review packet"))}</p>'
     body = f"""
   <header data-testid="ai-review-page">
     <h1>AI Review Assistant</h1>
     <p data-testid="ai-scope-note">AI-assisted explanation only. Deterministic rules remain authoritative.</p>
+    {case_identity}
     <nav><a href="/">Dashboard</a><a href="/review">Review packet</a><a href="/ai-review.json">AI Review JSON</a></nav>
     {badge("Fireworks configured: " + ("yes" if provider["fireworksConfigured"] else "no"), "good" if provider["fireworksConfigured"] else "warn")}
     {badge("Fireworks call succeeded: " + ("yes" if provider["fireworksCallSucceeded"] else "no"), "good" if provider["fireworksCallSucceeded"] else "warn")}
