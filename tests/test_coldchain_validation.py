@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import threading
 import urllib.error
@@ -14,13 +15,32 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
+SNAPSHOTS = ROOT / "tests" / "golden_snapshots.json"
 sys.path.insert(0, str(SRC))
 
 import ai_review_assistant  # noqa: E402
 from case_engine import case_packet, get_case, load_cases  # noqa: E402
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture  # noqa: E402
-from sensor_engine import cleaning_report, consensus_report, sensor_summary, sensor_window, sers_risk, synthetic_readings  # noqa: E402
-from serve_dashboard import DashboardHandler, render_ai_review, render_dashboard, render_review_packet  # noqa: E402
+from sensor_engine import (  # noqa: E402
+    cleaning_report,
+    consensus_report,
+    prediction_report,
+    sensor_summary,
+    sensor_window,
+    sers_risk,
+    synthetic_readings,
+)
+from serve_dashboard import (  # noqa: E402
+    DashboardHandler,
+    command_center_payload,
+    model_benchmark_json,
+    render_ai_review,
+    render_dashboard,
+    render_review_packet,
+    sensor_lab_payload,
+    system_status_json,
+    validation_evidence_json,
+)
 
 
 def assert_contains(text: str, needles: list[str]) -> None:
@@ -150,6 +170,7 @@ def test_routes(case: dict[str, Any]) -> None:
         model_benchmark_status, model_benchmark = fetch(base_url, "/model-benchmark")
         model_benchmark_json_status, model_benchmark_json = fetch(base_url, "/model-benchmark.json")
         public_data_status, public_data_page = fetch(base_url, "/public-data-readiness")
+        roadmap_status, roadmap_page = fetch(base_url, "/roadmap")
         baseline_case_status, baseline_case = fetch(base_url, "/cases/blocked-unresolved-pallet")
         baseline_case_review_status, baseline_case_review = fetch(base_url, "/cases/blocked-unresolved-pallet/review")
         simulated_status, simulated_review = fetch(
@@ -202,6 +223,7 @@ def test_routes(case: dict[str, Any]) -> None:
     assert model_benchmark_status == 200
     assert model_benchmark_json_status == 200
     assert public_data_status == 200
+    assert roadmap_status == 200
     assert baseline_case_status == 200
     assert baseline_case_review_status == 200
     assert simulated_status == 200
@@ -254,6 +276,9 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "On deterministic synthetic benchmark data only." in model_benchmark
     assert "No external datasets are ingested" in public_data_page
     assert "not ingested" in public_data_page
+    assert "Platform Roadmap" in roadmap_page
+    assert "FastAPI/Pydantic migration" in roadmap_page
+    assert "Planned items are not production claims" in roadmap_page
     assert 'data-testid="global-nav"' in dashboard
     assert '<a href="/command-center">Command Center</a>' in dashboard
     assert 'data-testid="global-nav"' in cases_page
@@ -419,6 +444,7 @@ def test_routes(case: dict[str, Any]) -> None:
     assert validation_payload["deterministicRulesAuthoritative"] is True
     assert validation_payload["productionValidated"] is False
     assert "/command-center" in validation_payload["routeChecklist"]
+    assert "/roadmap" in validation_payload["routeChecklist"]
     assert "synthetic_hackathon_beta" in beta_page
     assert "Sensor lab available" in beta_page
     assert "No real data" in beta_page
@@ -431,6 +457,84 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "No real data" in validation_page
     assert "No autonomous action" in validation_page
     assert "run manually after Render deploy" in validation_page
+
+
+def test_golden_json_snapshots(case: dict[str, Any]) -> None:
+    golden = json.loads(SNAPSHOTS.read_text(encoding="utf-8"))
+    baseline = get_case("blocked-unresolved-pallet")
+    baseline_result = case_packet(baseline)["result"]
+
+    command = command_center_payload()
+    assert command["appName"] == golden["commandCenter"]["appName"]
+    assert command["betaTotalGeneratedReadings"] == golden["commandCenter"]["betaTotalGeneratedReadings"]
+    assert command["caseCount"] == golden["commandCenter"]["caseCount"]
+    assert command["fireworksSafetySummary"]["fireworksAuthoritative"] == golden["commandCenter"]["fireworksAuthoritative"]
+    assert command["sersSummary"]["advisoryOnly"] == golden["commandCenter"]["sersAdvisoryOnly"]
+    assert command["deterministicReviewSummary"]["finalDisposition"] == golden["commandCenter"]["finalDisposition"]
+    assert command["deterministicReviewSummary"]["reviewStatus"] == golden["commandCenter"]["reviewStatus"]
+
+    status = system_status_json()
+    assert status["appName"] == golden["systemStatus"]["appName"]
+    assert status["betaTotalGeneratedReadings"] == golden["systemStatus"]["betaTotalGeneratedReadings"]
+    assert status["realDataUsed"] == golden["systemStatus"]["realDataUsed"]
+    assert status["autonomousActionsAllowed"] == golden["systemStatus"]["autonomousActionsAllowed"]
+    assert status["fireworksAuthoritative"] == golden["systemStatus"]["fireworksAuthoritative"]
+    assert status["productionValidated"] == golden["systemStatus"]["productionValidated"]
+
+    sensor_lab = sensor_lab_payload()
+    assert sensor_lab["betaTotalGeneratedReadings"] == golden["sensorLab"]["betaTotalGeneratedReadings"]
+    assert sensor_lab["readingsPerCase"] == golden["sensorLab"]["readingsPerCase"]
+    assert sensor_lab["sensorCount"] == golden["sensorLab"]["sensorCount"]
+    assert sensor_lab["zoneCount"] == golden["sensorLab"]["zoneCount"]
+    assert sensor_lab["realDataUsed"] == golden["sensorLab"]["realDataUsed"]
+    assert sensor_lab["autonomousActionsAllowed"] == golden["sensorLab"]["autonomousActionsAllowed"]
+
+    benchmark = model_benchmark_json()
+    assert benchmark["benchmarkScope"] == golden["modelBenchmark"]["benchmarkScope"]
+    assert benchmark["model"]["trainingRows"] == golden["modelBenchmark"]["trainingRows"]
+    assert benchmark["model"]["testRows"] == golden["modelBenchmark"]["testRows"]
+    assert sorted(benchmark["baselines"]) == sorted(golden["modelBenchmark"]["baselines"])
+
+    cleaning = cleaning_report(baseline)
+    assert cleaning["caseId"] == golden["baselineCleaningReport"]["caseId"]
+    assert cleaning["rawReadingCount"] == golden["baselineCleaningReport"]["rawReadingCount"]
+    assert cleaning["acceptedReadingCount"] == golden["baselineCleaningReport"]["acceptedReadingCount"]
+    assert cleaning["rejectedReadingCount"] == golden["baselineCleaningReport"]["rejectedReadingCount"]
+    assert cleaning["duplicateCount"] == golden["baselineCleaningReport"]["duplicateCount"]
+    assert cleaning["missingExpectedReadings"] == golden["baselineCleaningReport"]["missingExpectedReadings"]
+    for label, count in golden["baselineCleaningReport"]["flagCounts"].items():
+        assert cleaning["flagCounts"][label] == count
+
+    prediction = prediction_report(baseline, baseline_result, load_cases())
+    assert prediction["caseId"] == golden["baselinePrediction"]["caseId"]
+    assert prediction["advisoryOnly"] == golden["baselinePrediction"]["advisoryOnly"]
+    assert prediction["sers"]["riskScore"] == golden["baselinePrediction"]["riskScore"]
+    assert prediction["sers"]["riskBand"] == golden["baselinePrediction"]["riskBand"]
+    assert prediction["deterministicResultUnchanged"]["reviewStatus"] == golden["baselinePrediction"]["deterministicReviewStatus"]
+
+    validation = validation_evidence_json()
+    for key, value in golden["validationEvidence"].items():
+        assert validation[key] == value
+
+
+def test_readme_route_map_is_covered(case: dict[str, Any]) -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    routes_section = readme.split("## Routes", 1)[1].split("\n## ", 1)[0]
+    routes = re.findall(r"^- `([^`]+)`", routes_section, flags=re.MULTILINE)
+    assert routes
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), DashboardHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        for route in routes:
+            status, _ = fetch(base_url, route)
+            assert status == 200, route
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_case_routes_and_invariants(case: dict[str, Any]) -> None:

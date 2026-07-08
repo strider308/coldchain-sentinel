@@ -1,0 +1,70 @@
+{
+  "baselineCleaningReport": {
+    "acceptedReadingCount": 13822,
+    "caseId": "blocked-unresolved-pallet",
+    "duplicateCount": 1,
+    "flagCounts": {
+      "FLAGGED_DROPOUT": 12,
+      "FLAGGED_DRIFT": 402,
+      "FLAGGED_LOW_BATTERY": 230,
+      "FLAGGED_OUTLIER": 3,
+      "FLAGGED_WEAK_SIGNAL": 44
+    },
+    "missingExpectedReadings": 1,
+    "rawReadingCount": 13824,
+    "rejectedReadingCount": 2
+  },
+  "baselinePrediction": {
+    "advisoryOnly": true,
+    "caseId": "blocked-unresolved-pallet",
+    "deterministicReviewStatus": "HUMAN_REVIEW_REQUIRED",
+    "riskBand": "REVIEW",
+    "riskScore": 65.6
+  },
+  "commandCenter": {
+    "appName": "ColdChain Sentinel",
+    "betaTotalGeneratedReadings": 41472,
+    "caseCount": 3,
+    "fireworksAuthoritative": false,
+    "finalDisposition": "BLOCKED",
+    "reviewStatus": "HUMAN_REVIEW_REQUIRED",
+    "sersAdvisoryOnly": true
+  },
+  "modelBenchmark": {
+    "benchmarkScope": "On deterministic synthetic benchmark data only.",
+    "baselines": [
+      "naiveCurrentTemperatureThreshold",
+      "rollingAverageThreshold"
+    ],
+    "trainingRows": 302,
+    "testRows": 130
+  },
+  "sensorLab": {
+    "autonomousActionsAllowed": false,
+    "betaTotalGeneratedReadings": 41472,
+    "caseCount": 3,
+    "fireworksAuthoritative": false,
+    "readingsPerCase": 13824,
+    "realDataUsed": false,
+    "sensorCount": 24,
+    "zoneCount": 4
+  },
+  "systemStatus": {
+    "appName": "ColdChain Sentinel",
+    "autonomousActionsAllowed": false,
+    "betaTotalGeneratedReadings": 41472,
+    "caseCount": 3,
+    "fireworksAuthoritative": false,
+    "productionValidated": false,
+    "realDataUsed": false
+  },
+  "validationEvidence": {
+    "appName": "ColdChain Sentinel",
+    "autonomousActionsAllowed": false,
+    "deterministicRulesAuthoritative": true,
+    "fireworksAuthoritative": false,
+    "productionValidated": false,
+    "realDataUsed": false,
+    "sersAdvisoryOnly": true
+  }
+}

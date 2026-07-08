@@ -150,6 +150,7 @@ http://127.0.0.1:18080/
 - `/system-status.json` - machine-readable beta safety/status flags.
 - `/validation-evidence` - non-secret local validation evidence page.
 - `/validation-evidence.json` - machine-readable validation and safety checklist.
+- `/roadmap` - sustained platform development roadmap.
 
 `/ai-review` and `/ai-review.json` accept an optional `caseId` query parameter for the synthetic cases, for example `/ai-review?caseId=excursion-fully-mapped`.
 
@@ -364,6 +365,25 @@ Phase 4:
 - Production monitoring.
 - Enterprise audit logs.
 - Customer-specific models.
+
+## Architecture Documents
+
+- `docs/ARCHITECTURE.md`
+- `docs/SENSOR_DATA_CONTRACT.md`
+- `docs/CLEANING_PIPELINE.md`
+- `docs/CONSENSUS_ENGINE.md`
+- `docs/SERS_ALGORITHM.md`
+- `docs/MODEL_BENCHMARKING.md`
+- `docs/AI_SAFETY_GATE.md`
+- `docs/CLAIMS_BOUNDARY.md`
+- `docs/POST_HACKATHON_ROADMAP.md`
+
+Planned tool adoption remains gated:
+
+- FastAPI/Pydantic: planned when typed API boundaries become worth the migration.
+- DuckDB/Polars: planned for local analytics evaluation.
+- TimescaleDB: planned for time-series persistence evaluation.
+- MLflow/Evidently: planned for experiment and drift reporting evaluation.
 
 ## Submission Checklist
 

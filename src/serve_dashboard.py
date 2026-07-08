@@ -48,7 +48,7 @@ def global_nav() -> str:
     return (
         '<nav class="global-nav" data-testid="global-nav">'
         '<a href="/">Home</a><a href="/command-center">Command Center</a><a href="/cases">Cases</a><a href="/review" data-testid="review-packet-link">Baseline Review</a>'
-        '<a href="/sensor-lab">Sensor Lab</a><a href="/data-pipeline">Pipeline</a><a href="/model-benchmark">Benchmark</a><a href="/ai-review" data-testid="ai-review-link">AI Review</a><a href="/health">Health</a>'
+        '<a href="/sensor-lab">Sensor Lab</a><a href="/data-pipeline">Pipeline</a><a href="/model-benchmark">Benchmark</a><a href="/roadmap">Roadmap</a><a href="/ai-review" data-testid="ai-review-link">AI Review</a><a href="/health">Health</a>'
         '<a href="https://github.com/strider308/coldchain-sentinel">GitHub repo</a>'
         "</nav>"
     )
@@ -281,6 +281,7 @@ def command_center_payload() -> dict[str, Any]:
             "aiReview": "/ai-review",
             "systemStatus": "/system-status.json",
             "validationEvidence": "/validation-evidence",
+            "roadmap": "/roadmap",
         },
         "safetyDisclaimers": [
             "Synthetic data only.",
@@ -671,6 +672,7 @@ def validation_evidence_json() -> dict[str, Any]:
             "/cases/blocked-unresolved-pallet/audit.md",
             "/system-status.json",
             "/validation-evidence",
+            "/roadmap",
             "/ai-review",
             "/health",
         ],
@@ -733,6 +735,34 @@ def render_validation_evidence() -> str:
   <main><section class="panel">{rows}<div class="toolbar"><a class="button" href="/validation-evidence.json">Validation JSON</a><a class="button" href="/command-center">Command Center</a></div></section></main>
 """
     return page("ColdChain Sentinel Validation Evidence", body)
+
+
+def render_roadmap() -> str:
+    rows = table(
+        ["Phase", "Focus", "Adoption status"],
+        [
+            ["Current synthetic beta", "Command Center, Sensor Lab, deterministic trace, SERS advisory scoring, Fireworks safety gate", "implemented with synthetic data"],
+            ["Data contract v2", "Richer schema adapters after source licensing review", "planned"],
+            ["Cleaning pipeline v2", "More robust quality rules and reviewer-facing explanations", "planned"],
+            ["SERS v2", "Calibrated advisory scoring with stronger evaluation", "planned"],
+            ["Public dataset readiness", "License/TOS, schema, and provenance review before ingestion", "gated"],
+            ["FastAPI/Pydantic migration", "Typed API boundary when stdlib server becomes limiting", "planned"],
+            ["DuckDB/Polars analytics", "Local analytical processing evaluation", "planned"],
+            ["TimescaleDB evaluation", "Time-series persistence evaluation", "planned"],
+            ["MLflow/Evidently evaluation", "Experiment and drift reporting evaluation", "planned"],
+            ["Pilot readiness", "Customer-specific pilots after legal/compliance review", "future"],
+        ],
+        "roadmap-table",
+    )
+    body = f"""
+  <header data-testid="roadmap-page">
+    {global_nav()}
+    <h1>Platform Roadmap</h1>
+    <p>Sustained platform roadmap for the synthetic beta. Planned items are not production claims.</p>
+  </header>
+  <main><section class="panel">{rows}</section></main>
+"""
+    return page("ColdChain Sentinel Roadmap", body)
 
 
 def data_pipeline_json() -> dict[str, Any]:
@@ -1181,6 +1211,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/validation-evidence.json":
             self.respond_json(validation_evidence_json())
+            return
+        if path == "/roadmap":
+            self.respond_text(render_roadmap())
             return
         if path == "/data-pipeline":
             self.respond_text(render_data_pipeline())
