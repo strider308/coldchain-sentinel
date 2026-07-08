@@ -120,6 +120,8 @@ http://127.0.0.1:18080/
 ## Routes
 
 - `/` - deterministic dashboard.
+- `/command-center` - complete platform overview for judges and investors.
+- `/command-center.json` - machine-readable command center summary.
 - `/cases` - synthetic case workspace.
 - `/sensor-lab` - high-volume synthetic sensor aggregation UI.
 - `/sensor-lab.json` - machine-readable sensor lab summaries.
@@ -150,6 +152,10 @@ http://127.0.0.1:18080/
 
 `/ai-review` and `/ai-review.json` accept an optional `caseId` query parameter for the synthetic cases, for example `/ai-review?caseId=excursion-fully-mapped`.
 
+## Recommended Demo Flow
+
+Start at `/command-center` for the full platform summary. From there, open `/sensor-lab`, `/data-pipeline`, `/model-benchmark`, `/cases/blocked-unresolved-pallet/review`, and `/ai-review` to inspect each layer.
+
 ## Current Beta Capabilities
 
 - Synthetic telemetry timeline with threshold labels.
@@ -163,6 +169,7 @@ http://127.0.0.1:18080/
 - Reviewer workspace with local-only checklist and notes.
 - Evidence, trace, review packet, and audit packet exports.
 - Safe unknown-case page listing available synthetic case IDs.
+- Platform Command Center that connects sensor telemetry, cleaning, consensus, SERS, benchmarks, deterministic review packets, Fireworks safety gates, and readiness checks.
 
 ## Deterministic Rule Trace
 

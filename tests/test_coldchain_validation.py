@@ -136,6 +136,8 @@ def test_routes(case: dict[str, Any]) -> None:
     base_url = f"http://127.0.0.1:{server.server_port}"
     try:
         dashboard_status, dashboard = fetch(base_url, "/")
+        command_center_status, command_center = fetch(base_url, "/command-center")
+        command_center_json_status, command_center_json = fetch(base_url, "/command-center.json")
         review_status, review = fetch(base_url, "/review")
         review_json_status, review_json = fetch(base_url, "/review.json")
         ai_review_status, ai_review = fetch(base_url, "/ai-review")
@@ -185,6 +187,8 @@ def test_routes(case: dict[str, Any]) -> None:
         thread.join(timeout=5)
 
     assert dashboard_status == 200
+    assert command_center_status == 200
+    assert command_center_json_status == 200
     assert review_status == 200
     assert review_json_status == 200
     assert ai_review_status == 200
@@ -217,6 +221,18 @@ def test_routes(case: dict[str, Any]) -> None:
     assert system_status_code == 200
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
+    assert "/command-center" in dashboard
+    assert "Platform Command Center" in command_center
+    assert "Sensor telemetry summary" in command_center
+    assert "Data cleaning summary" in command_center
+    assert "Redundancy and consensus summary" in command_center
+    assert "SERS advisory risk summary" in command_center
+    assert "Model benchmark summary" in command_center
+    assert "Deterministic review packet summary" in command_center
+    assert "Fireworks safety-gate summary" in command_center
+    assert "No real data" in command_center
+    assert "No autonomous operational actions" in command_center
+    assert "Deterministic fallback remains authoritative" in command_center
     assert "Final disposition blocked." in review
     assert "Fireworks call succeeded: no" in ai_review
     assert "Structured output verified: no" in ai_review
@@ -235,6 +251,7 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "No external datasets are ingested" in public_data_page
     assert "not ingested" in public_data_page
     assert 'data-testid="global-nav"' in dashboard
+    assert '<a href="/command-center">Command Center</a>' in dashboard
     assert 'data-testid="global-nav"' in cases_page
     assert 'data-testid="global-nav"' in baseline_case_review
     assert 'class="global-nav"' in baseline_case_review
@@ -324,6 +341,7 @@ def test_routes(case: dict[str, Any]) -> None:
     cleaning_json = json.loads(cleaning_text)
     prediction_json = json.loads(prediction_text)
     sensor_lab_payload = json.loads(sensor_lab_json)
+    command_payload = json.loads(command_center_json)
     pipeline_payload = json.loads(data_pipeline_json)
     benchmark_payload = json.loads(model_benchmark_json)
     system_status = json.loads(system_status_json)
@@ -362,6 +380,14 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "rollingAverageThreshold" in benchmark_payload["baselines"]
     assert "accuracy" in benchmark_payload["metrics"]
     assert "confusionMatrix" in benchmark_payload["metrics"]
+    assert command_payload["appName"] == "ColdChain Sentinel"
+    assert command_payload["betaTotalGeneratedReadings"] == 41472
+    assert command_payload["fireworksSafetySummary"]["fireworksAuthoritative"] is False
+    assert command_payload["deterministicReviewSummary"]["autonomousActionsAllowed"] is False
+    assert command_payload["sersSummary"]["advisoryOnly"] is True
+    assert command_payload["deterministicReviewSummary"]["finalDisposition"] == "BLOCKED"
+    assert command_payload["deterministicReviewSummary"]["reviewStatus"] == "HUMAN_REVIEW_REQUIRED"
+    assert command_payload["deterministicReviewSummary"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
     assert sensor_lab_payload["syntheticOnly"] is True
     assert sensor_lab_payload["betaTotalGeneratedReadings"] == 41472
     assert sensor_lab_payload["readingsPerCase"] == 13824

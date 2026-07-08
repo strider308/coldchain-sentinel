@@ -47,7 +47,7 @@ def badge(text: str, tone: str = "neutral") -> str:
 def global_nav() -> str:
     return (
         '<nav class="global-nav" data-testid="global-nav">'
-        '<a href="/">Home</a><a href="/cases">Cases</a><a href="/review" data-testid="review-packet-link">Baseline Review</a>'
+        '<a href="/">Home</a><a href="/command-center">Command Center</a><a href="/cases">Cases</a><a href="/review" data-testid="review-packet-link">Baseline Review</a>'
         '<a href="/sensor-lab">Sensor Lab</a><a href="/data-pipeline">Pipeline</a><a href="/model-benchmark">Benchmark</a><a href="/ai-review" data-testid="ai-review-link">AI Review</a><a href="/health">Health</a>'
         '<a href="https://github.com/strider308/coldchain-sentinel">GitHub repo</a>'
         "</nav>"
@@ -203,6 +203,94 @@ def beta_sensor_totals() -> dict[str, Any]:
     }
 
 
+def command_center_payload() -> dict[str, Any]:
+    case = get_case("blocked-unresolved-pallet")
+    packet = case_packet(case)
+    result = packet["result"]
+    totals = beta_sensor_totals()
+    clean = cleaning_report(case)
+    consensus = consensus_report(case)
+    risk = sers_risk(case, result)
+    benchmark = model_benchmark_json()
+    return {
+        "appName": "ColdChain Sentinel",
+        "mode": "synthetic_hackathon_beta",
+        "betaTotalGeneratedReadings": totals["betaTotalGeneratedReadings"],
+        "caseCount": totals["caseCount"],
+        "sensorSummary": {
+            "readingsPerCase": totals["readingsPerCase"],
+            "sensorCount": totals["sensorCount"],
+            "zoneCount": totals["zoneCount"],
+            "timeRangeHours": totals["timeRangeHours"],
+            "readingIntervalMinutes": totals["readingIntervalMinutes"],
+            "syntheticOnly": True,
+        },
+        "cleaningSummary": {
+            "acceptedReadings": clean["acceptedReadingCount"],
+            "rejectedReadings": clean["rejectedReadingCount"],
+            "duplicateCount": clean["duplicateCount"],
+            "dropoutCount": clean["flagCounts"]["FLAGGED_DROPOUT"],
+            "outlierCount": clean["flagCounts"]["FLAGGED_OUTLIER"],
+            "driftCount": clean["flagCounts"]["FLAGGED_DRIFT"],
+            "lowBatteryCount": clean["flagCounts"]["FLAGGED_LOW_BATTERY"],
+            "weakSignalCount": clean["flagCounts"]["FLAGGED_WEAK_SIGNAL"],
+        },
+        "consensusSummary": consensus["zones"][0],
+        "sersSummary": {
+            "riskScore": risk["riskScore"],
+            "riskBand": risk["riskBand"],
+            "topContributingFactors": risk["topContributingFactors"],
+            "predictionHorizonMinutes": 30,
+            "advisoryOnly": True,
+        },
+        "benchmarkSummary": {
+            "benchmarkScope": benchmark["benchmarkScope"],
+            "trainingRows": benchmark["model"]["trainingRows"],
+            "testRows": benchmark["model"]["testRows"],
+            "metrics": benchmark["metrics"],
+            "baselines": list(benchmark["baselines"].keys()),
+        },
+        "deterministicReviewSummary": {
+            "shipmentId": result["shipmentId"],
+            "finalDisposition": result["finalDisposition"],
+            "reviewStatus": result["reviewStatus"],
+            "unresolvedPalletIds": result["unresolvedPalletIds"],
+            "blockers": result["blockers"],
+            "autonomousActionsAllowed": result["autonomousActionsAllowed"],
+        },
+        "fireworksSafetySummary": {
+            "fireworksConfigured": bool(os.environ.get("FIREWORKS_API_KEY")),
+            "fireworksAuthoritative": False,
+            "handling": "model output is validated, sanitized, or rejected; deterministic fallback remains authoritative",
+        },
+        "readinessSummary": {
+            "realDataUsed": False,
+            "autonomousActionsAllowed": False,
+            "productionValidated": False,
+            "deterministicRulesAuthoritative": True,
+        },
+        "routeMap": {
+            "sensorLab": "/sensor-lab",
+            "dataPipeline": "/data-pipeline",
+            "cleaningReport": "/cases/blocked-unresolved-pallet/cleaning-report.json",
+            "prediction": "/cases/blocked-unresolved-pallet/prediction.json",
+            "modelBenchmark": "/model-benchmark",
+            "reviewWorkspace": "/cases/blocked-unresolved-pallet/review",
+            "ruleTrace": "/cases/blocked-unresolved-pallet/trace.json",
+            "auditPacket": "/cases/blocked-unresolved-pallet/audit.md",
+            "aiReview": "/ai-review",
+            "systemStatus": "/system-status.json",
+        },
+        "safetyDisclaimers": [
+            "Synthetic data only.",
+            "No autonomous operational action.",
+            "Deterministic rules remain authoritative.",
+            "Predictions and SERS are advisory only.",
+            "Not production, medical, pharma, or compliance validated.",
+        ],
+    }
+
+
 def table(headers: list[str], rows: list[list[str]], testid: str) -> str:
     head = "".join(f"<th>{html.escape(header)}</th>" for header in headers)
     body = "\n".join(
@@ -302,6 +390,11 @@ def render_dashboard(case: dict[str, Any] | None = None) -> str:
     {badge("Track 3 demo", "good")}{badge("Fireworks optional", "warn")}{badge("No production validation", "warn")}
   </header>
   <main>
+    <section class="panel" data-testid="command-center-cta">
+      <h2>Platform Command Center</h2>
+      <p>One page connects sensor telemetry, cleaning, consensus, SERS advisory risk, model benchmark, deterministic review facts, Fireworks safety gates, and readiness checks.</p>
+      <div class="toolbar"><a class="button" href="/command-center">Open Command Center</a><a class="button" href="/cases">Cases</a><a class="button" href="/sensor-lab">Sensor Lab</a><a class="button" href="/data-pipeline">Data Pipeline</a><a class="button" href="/model-benchmark">Model Benchmark</a><a class="button" href="/ai-review">AI Review</a></div>
+    </section>
     <section class="grid" aria-label="Shipment summary">
       <article class="panel" data-testid="shipment-dashboard">
         <h2>Shipment overview</h2>
@@ -341,6 +434,40 @@ def render_dashboard(case: dict[str, Any] | None = None) -> str:
   </main>
 """
     return page("ColdChain Sentinel", body)
+
+
+def render_command_center() -> str:
+    payload = command_center_payload()
+    cleaning = payload["cleaningSummary"]
+    consensus = payload["consensusSummary"]
+    sers = payload["sersSummary"]
+    benchmark = payload["benchmarkSummary"]
+    review = payload["deterministicReviewSummary"]
+    fireworks = payload["fireworksSafetySummary"]
+    readiness = payload["readinessSummary"]
+    factors = items([str(value) for value in sers["topContributingFactors"]], "command-center-factor")
+    blockers = items([str(value) for value in review["blockers"]], "command-center-blocker")
+    body = f"""
+  <header data-testid="command-center-page">
+    {global_nav()}
+    <h1>Platform Command Center</h1>
+    <p>ColdChain Sentinel turns noisy high-volume synthetic cold-chain sensor telemetry into cleaned evidence, redundancy consensus, advisory risk scores, deterministic rule traces, and human-review audit packets.</p>
+    {badge("Synthetic investor beta", "warn")}{badge("Deterministic rules authoritative", "good")}{badge("No autonomous action", "warn")}
+  </header>
+  <main>
+    <section class="grid">
+      <article class="panel" data-testid="command-sensor-summary"><h2>Sensor telemetry summary</h2><p class="metric">{payload["betaTotalGeneratedReadings"]}</p><p>Total synthetic readings represented across beta. Readings per case: {payload["sensorSummary"]["readingsPerCase"]}. Sensors: {payload["sensorSummary"]["sensorCount"]}. Zones: {payload["sensorSummary"]["zoneCount"]}. Time range: {payload["sensorSummary"]["timeRangeHours"]} hours. Interval: {payload["sensorSummary"]["readingIntervalMinutes"]} minutes.</p><p>Synthetic data only.</p><div class="toolbar"><a class="button" href="/sensor-lab">Sensor Lab</a><a class="button" href="/sensor-lab.json">Sensor JSON</a></div></article>
+      <article class="panel" data-testid="command-cleaning-summary"><h2>Data cleaning summary</h2><p>Accepted readings: {cleaning["acceptedReadings"]}. Rejected readings: {cleaning["rejectedReadings"]}. Duplicates: {cleaning["duplicateCount"]}. Dropouts: {cleaning["dropoutCount"]}. Outliers: {cleaning["outlierCount"]}. Drift: {cleaning["driftCount"]}. Low battery: {cleaning["lowBatteryCount"]}. Weak signal: {cleaning["weakSignalCount"]}.</p><div class="toolbar"><a class="button" href="/data-pipeline">Data Pipeline</a><a class="button" href="/cases/blocked-unresolved-pallet/cleaning-report.json">Cleaning JSON</a></div></article>
+      <article class="panel" data-testid="command-consensus-summary"><h2>Redundancy and consensus summary</h2><p>Sensor trust score: {consensus["sensorTrustScore"]}. Zone consensus score: {consensus["zoneConsensusScore"]}. Consensus label: {html.escape(consensus["consensusLabel"])}.</p><p>Redundancy compares neighboring synthetic sensors so one bad sensor is treated as a review signal, not a final conclusion.</p></article>
+      <article class="panel" data-testid="command-sers-summary"><h2>SERS advisory risk summary</h2><p class="metric">{sers["riskScore"]}</p><p>Risk band: {html.escape(sers["riskBand"])}. Prediction horizon: {sers["predictionHorizonMinutes"]} minutes.</p><ul>{factors}</ul><p>Advisory only; predictions do not alter deterministic review facts.</p><div class="toolbar"><a class="button" href="/cases/blocked-unresolved-pallet/prediction.json">Prediction JSON</a></div></article>
+      <article class="panel" data-testid="command-benchmark-summary"><h2>Model benchmark summary</h2><p>{html.escape(benchmark["benchmarkScope"])}</p><p>Training rows: {benchmark["trainingRows"]}. Test rows: {benchmark["testRows"]}. Accuracy: {benchmark["metrics"]["accuracy"]}. Compared baselines: {html.escape(", ".join(benchmark["baselines"]))}.</p><p>Benchmarked on deterministic synthetic data against simple baselines.</p><div class="toolbar"><a class="button" href="/model-benchmark">Benchmark</a><a class="button" href="/model-benchmark.json">Benchmark JSON</a></div></article>
+      <article class="panel status-block" data-testid="command-review-summary"><h2>Deterministic review packet summary</h2><p>Shipment ID: {html.escape(review["shipmentId"])}. finalDisposition: {html.escape(review["finalDisposition"])}. reviewStatus: {html.escape(review["reviewStatus"])}.</p><p>Unresolved pallet IDs: {html.escape(", ".join(review["unresolvedPalletIds"]) or "None")}. autonomousActionsAllowed: {str(review["autonomousActionsAllowed"]).lower()}.</p><ul>{blockers}</ul><div class="toolbar"><a class="button" href="/cases/blocked-unresolved-pallet/review">Review</a><a class="button" href="/cases/blocked-unresolved-pallet/trace.json">Trace JSON</a><a class="button" href="/cases/blocked-unresolved-pallet/audit.md">Audit packet</a></div></article>
+      <article class="panel" data-testid="command-fireworks-summary"><h2>Fireworks safety-gate summary</h2><p>Fireworks configured: {str(fireworks["fireworksConfigured"]).lower()}. Fireworks authoritative: false.</p><p>Model output is validated, sanitized, or rejected. Deterministic fallback remains authoritative.</p><div class="toolbar"><a class="button" href="/ai-review">AI Review</a><a class="button" href="/ai-review.json">AI JSON</a></div></article>
+      <article class="panel status-block" data-testid="command-readiness-summary"><h2>Readiness and safety summary</h2><p>No real data: {str(not readiness["realDataUsed"]).lower()}. No autonomous operational actions: {str(not readiness["autonomousActionsAllowed"]).lower()}. Not production/compliance validated: {str(not readiness["productionValidated"]).lower()}.</p><p>Synthetic hackathon/investor beta. Deterministic rules remain authoritative.</p><div class="toolbar"><a class="button" href="/beta-readiness">Beta Readiness</a><a class="button" href="/system-status.json">System Status</a><a class="button" href="/public-data-readiness">Public Data Readiness</a></div></article>
+    </section>
+  </main>
+"""
+    return page("ColdChain Sentinel Command Center", body)
 
 
 def render_cases() -> str:
@@ -969,6 +1096,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         simulate_resolved = query.get("simulateResolved", ["false"])[0].lower() == "true"
         if path in ("/", "/index.html"):
             self.respond_text(render_dashboard())
+            return
+        if path == "/command-center":
+            self.respond_text(render_command_center())
+            return
+        if path == "/command-center.json":
+            self.respond_json(command_center_payload())
             return
         if path == "/sensor-lab":
             self.respond_text(render_sensor_lab())
