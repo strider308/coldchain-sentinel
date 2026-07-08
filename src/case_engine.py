@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sensor_engine import sensor_summary
+
 ROOT = Path(__file__).resolve().parents[1]
 CASES_FIXTURE = ROOT / "fixtures" / "synthetic-cases.json"
 BASELINE_CASE_ID = "blocked-unresolved-pallet"
@@ -314,10 +316,17 @@ def evidence_json(case: dict[str, Any], simulate_resolved: bool = False) -> dict
 
 def trace_json(case: dict[str, Any], simulate_resolved: bool = False) -> dict[str, Any]:
     packet = case_packet(case, simulate_resolved)
+    sensors = sensor_summary(case, packet["result"])
     return {
         "caseId": packet["caseId"],
         "shipmentId": packet["result"]["shipmentId"],
         "trace": packet["ruleTrace"],
+        "sensorAggregationReference": {
+            "generatedReadingCount": sensors["generatedReadingCount"],
+            "aboveThresholdReadingCount": sensors["aggregationSummary"]["aboveThresholdReadingCount"],
+            "excursionWindowCount": len(sensors["excursionWindows"]),
+            "impactedZones": sensors["impactedZones"],
+        },
         "result": packet["result"],
         "safetyDisclaimers": packet["limitations"],
     }
@@ -407,6 +416,22 @@ def export_markdown(case: dict[str, Any], simulate_resolved: bool = False) -> st
 
 def audit_markdown(case: dict[str, Any], simulate_resolved: bool = False) -> str:
     packet = case_packet(case, simulate_resolved)
+    sensors = sensor_summary(case, packet["result"])
+    sensor_lines = [
+        f'- Generated readings represented: {sensors["generatedReadingCount"]}',
+        f'- Sensor count: {sensors["sensorCount"]}',
+        f'- Zone count: {sensors["zoneCount"]}',
+        f'- Above-threshold readings: {sensors["aggregationSummary"]["aboveThresholdReadingCount"]}',
+        f'- Rejected/noisy readings: {sensors["aggregationSummary"]["rejectedNoisyReadingCount"]}',
+        f'- Excursion windows: {len(sensors["excursionWindows"])}',
+        f'- Impacted zones: {", ".join(sensors["impactedZones"]) or "None"}',
+        f'- Readings reduced into deterministic review packet: {sensors["generatedReadingCount"]}',
+    ]
+    quality_lines = [f"- {label}: {count}" for label, count in sorted(sensors["sensorQualitySummary"].items())]
+    window_lines = [
+        f'- {window["zoneId"]}: {window["startUtc"]} to {window["endUtc"]}; {window["durationMinutes"]} minutes'
+        for window in sensors["excursionWindows"]
+    ] or ["- None"]
     simulation_lines = []
     if simulate_resolved and case["caseId"] == BASELINE_CASE_ID:
         simulation_lines = [
@@ -420,6 +445,15 @@ def audit_markdown(case: dict[str, Any], simulate_resolved: bool = False) -> str
             f'# Audit Packet - {packet["caseTitle"]}',
             "",
             export_markdown(case, simulate_resolved),
+            "## High-Volume Sensor Aggregation Summary",
+            *sensor_lines,
+            "",
+            "## Sensor Quality Labels Summary",
+            *quality_lines,
+            "",
+            "## Sensor Excursion Windows",
+            *window_lines,
+            "",
             "## Reviewer Local Notes",
             "Reviewer local notes: stored only in browser localStorage and not included in server export.",
             "",

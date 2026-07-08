@@ -119,8 +119,12 @@ http://127.0.0.1:18080/
 
 - `/` - deterministic dashboard.
 - `/cases` - synthetic case workspace.
+- `/sensor-lab` - high-volume synthetic sensor aggregation UI.
+- `/sensor-lab.json` - machine-readable sensor lab summaries.
 - `/cases/blocked-unresolved-pallet` - case detail page.
 - `/cases/blocked-unresolved-pallet/review` - reviewer workspace.
+- `/cases/blocked-unresolved-pallet/sensor-summary.json` - deterministic synthetic sensor aggregation summary.
+- `/cases/blocked-unresolved-pallet/sensor-window.json?offset=0&limit=100` - capped synthetic sensor reading window.
 - `/cases/blocked-unresolved-pallet/trace.json` - deterministic rule trace JSON.
 - `/cases/blocked-unresolved-pallet/evidence.json` - case evidence timeline JSON.
 - `/cases/blocked-unresolved-pallet/export.md` - markdown export packet.
@@ -131,12 +135,15 @@ http://127.0.0.1:18080/
 - `/ai-review` - optional Fireworks-assisted reviewer brief with structured, sanitized, or deterministic fallback output.
 - `/ai-review.json` - AI review assistant JSON with unchanged deterministic result.
 - `/health` - provider-disabled health status.
+- `/beta-readiness` - synthetic beta capability status page.
+- `/system-status.json` - machine-readable beta safety/status flags.
 
 `/ai-review` and `/ai-review.json` accept an optional `caseId` query parameter for the synthetic cases, for example `/ai-review?caseId=excursion-fully-mapped`.
 
 ## Current Beta Capabilities
 
 - Synthetic telemetry timeline with threshold labels.
+- Large deterministic synthetic sensor stream aggregation, defaulting to 24 sensors over 48 hours at 5-minute intervals.
 - Deterministic rule trace that does not depend on Fireworks.
 - Reviewer workspace with local-only checklist and notes.
 - Evidence, trace, review packet, and audit packet exports.
@@ -147,6 +154,14 @@ http://127.0.0.1:18080/
 Each synthetic case includes local synthetic temperature readings. The app derives threshold breaches, excursion windows, affected zones, pallet mapping state, blockers, review status, and `autonomousActionsAllowed: false` without Fireworks or any external dataset.
 
 Trace items include `ruleId`, rule name, status, input summary, output summary, evidence IDs, and safety impact. Example rule IDs include `TEMP_THRESHOLD_CHECK`, `EXCURSION_WINDOW_CALCULATION`, `ZONE_IMPACT_IDENTIFICATION`, `PALLET_MAPPING_CHECK`, `HUMAN_REVIEW_GATE`, and `AUTONOMOUS_ACTION_DENY`.
+
+## Synthetic Sensor Lab
+
+The sensor lab generates high-volume synthetic readings deterministically from compact local case configuration. The default demo scale is 24 sensors, 4 zones, 48 hours, and 5-minute readings, producing 13,824 synthetic readings per case without committing a generated dataset file.
+
+Aggregation functions calculate readings per sensor and zone, min/max/average temperature, above-threshold counts, consecutive excursion windows, dropout counts, outlier counts, noisy/rejected counts, impacted zones, mapped pallets, unresolved pallets, and evidence IDs. Quality labels include `SENSOR_OK`, `SENSOR_READING_ABOVE_THRESHOLD`, `SENSOR_DROPOUT`, `SENSOR_DRIFT_POSSIBLE`, `SENSOR_OUTLIER_REJECTED`, and `SENSOR_WINDOW_ESCALATED`.
+
+The app does not ask reviewers to inspect every reading. It compresses high-volume synthetic telemetry into deterministic evidence, rule traces, and human-review packets. Sensor routes return summaries or capped windows; `/cases/{caseId}/sensor-window.json` defaults to 100 readings and caps `limit` at 500.
 
 ## Local Review Session
 

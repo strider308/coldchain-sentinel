@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from ai_review_assistant import build_ai_review
 from case_engine import audit_markdown, case_packet, evidence_json, export_markdown, get_case, load_cases, trace_json
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture
+from sensor_engine import sensor_summary, sensor_window
 
 HOST = "127.0.0.1"
 PORT = 8080
@@ -29,7 +30,7 @@ def global_nav() -> str:
     return (
         '<nav class="global-nav" data-testid="global-nav">'
         '<a href="/">Home</a><a href="/cases">Cases</a><a href="/review" data-testid="review-packet-link">Baseline Review</a>'
-        '<a href="/ai-review" data-testid="ai-review-link">AI Review</a><a href="/health">Health</a>'
+        '<a href="/sensor-lab">Sensor Lab</a><a href="/ai-review" data-testid="ai-review-link">AI Review</a><a href="/health">Health</a>'
         '<a href="https://github.com/strider308/coldchain-sentinel">GitHub repo</a>'
         "</nav>"
     )
@@ -115,6 +116,39 @@ def telemetry_table(values: list[dict[str, Any]], threshold: float) -> str:
         ],
         "telemetry-timeline",
     )
+
+
+def sensor_preview_table(readings: list[dict[str, Any]]) -> str:
+    return table(
+        ["Timestamp", "Sensor", "Zone", "Temperature", "Quality label", "Evidence ID"],
+        [
+            [
+                row["timestampUtc"],
+                row["sensorId"],
+                row["zoneId"],
+                "missing" if row["temperatureC"] is None else f'{row["temperatureC"]} C',
+                row["qualityLabel"],
+                row["evidenceId"] or "None",
+            ]
+            for row in readings
+        ],
+        "sensor-window-preview",
+    )
+
+
+def sensor_summary_panel(case_id: str, summary: dict[str, Any]) -> str:
+    return f"""
+      <article class="panel" data-testid="large-sensor-data-summary">
+        <h2>Large Sensor Data Summary</h2>
+        <p>ColdChain Sentinel does not ask reviewers to inspect every reading. It compresses high-volume synthetic telemetry into deterministic evidence, rule traces, and human-review packets.</p>
+        <p>Total readings represented: {summary["generatedReadingCount"]}</p>
+        <p>Sensor count: {summary["sensorCount"]}. Zone count: {summary["zoneCount"]}. Threshold: {summary["thresholdMaxC"]} C.</p>
+        <p>Detected excursion count: {len(summary["excursionWindows"])}. Above-threshold readings: {summary["aggregationSummary"]["aboveThresholdReadingCount"]}.</p>
+        <p>Noisy/dropped readings: {summary["aggregationSummary"]["rejectedNoisyReadingCount"]}. Impacted zones: {html.escape(", ".join(summary["impactedZones"]) or "None")}.</p>
+        <p>Evidence IDs: {html.escape(", ".join(eid for window in summary["excursionWindows"] for eid in window["evidenceIds"]) or "None")}.</p>
+        <div class="toolbar"><a class="button" href="/cases/{html.escape(case_id)}/sensor-summary.json">Sensor summary JSON</a><a class="button" href="/cases/{html.escape(case_id)}/sensor-window.json?offset=0&limit=100">First 100 readings</a></div>
+      </article>
+"""
 
 
 def table(headers: list[str], rows: list[list[str]], testid: str) -> str:
@@ -308,6 +342,93 @@ def render_cases() -> str:
     return page("ColdChain Sentinel Cases", body)
 
 
+def sensor_lab_payload() -> dict[str, Any]:
+    summaries = []
+    for case in load_cases():
+        packet = case_packet(case)
+        summaries.append(sensor_summary(case, packet["result"]))
+    return {
+        "syntheticOnly": True,
+        "summary": "Large synthetic sensor stream is deterministically aggregated into review evidence.",
+        "cases": summaries,
+    }
+
+
+def render_sensor_lab() -> str:
+    cases = load_cases()
+    cards = []
+    for case in cases:
+        packet = case_packet(case)
+        summary = sensor_summary(case, packet["result"])
+        cards.append(
+            f"""
+      <article class="panel" data-testid="sensor-lab-case-{html.escape(case["caseId"])}">
+        <h2>{html.escape(case["caseTitle"])}</h2>
+        <p>{html.escape(case["scenarioSummary"])}</p>
+        <p>Total synthetic readings: {summary["generatedReadingCount"]}. Sensors: {summary["sensorCount"]}. Zones: {summary["zoneCount"]}.</p>
+        <p>Time range: {summary["timeRange"]["startUtc"]} to {summary["timeRange"]["endUtc"]}. Threshold: {summary["thresholdMaxC"]} C.</p>
+        <p>Above-threshold readings: {summary["aggregationSummary"]["aboveThresholdReadingCount"]}. Excursion windows: {len(summary["excursionWindows"])}.</p>
+        <p>Dropout/noisy readings: {summary["aggregationSummary"]["rejectedNoisyReadingCount"]}. Impacted zones: {html.escape(", ".join(summary["impactedZones"]) or "None")}.</p>
+        <p>Mapped pallets: {html.escape(", ".join(summary["mappedPalletIds"]) or "None")}. Unresolved pallets: {html.escape(", ".join(summary["unresolvedPalletIds"]) or "None")}.</p>
+        <div class="toolbar"><a class="button" href="/cases/{html.escape(case["caseId"])}/review">Review workspace</a><a class="button" href="/cases/{html.escape(case["caseId"])}/trace.json">Rule trace</a><a class="button" href="/cases/{html.escape(case["caseId"])}/audit.md">Audit packet</a><a class="button" href="/cases/{html.escape(case["caseId"])}/sensor-summary.json">Sensor summary JSON</a></div>
+      </article>
+"""
+        )
+    preview_case = get_case("blocked-unresolved-pallet")
+    preview = sensor_window(preview_case, 0, 12)
+    body = f"""
+  <header data-testid="sensor-lab-page">
+    {global_nav()}
+    <h1>Sensor Lab</h1>
+    <p>Synthetic-only high-volume telemetry demonstration.</p>
+  </header>
+  <main>
+    <section class="panel">
+      <h2>High-volume synthetic telemetry</h2>
+      <p>ColdChain Sentinel does not ask reviewers to inspect every reading. It compresses high-volume synthetic telemetry into deterministic evidence, rule traces, and human-review packets.</p>
+      <p>Flow: large synthetic sensor stream to aggregation to threshold and excursion detection to sensor quality filtering to zone impact to pallet mapping to deterministic rule trace to human-review packet.</p>
+    </section>
+    <section class="grid" aria-label="Sensor lab cases">{"".join(cards)}</section>
+    <section class="panel" data-testid="sensor-window-preview-panel"><h2>Sensor window preview</h2><p>Showing 12 readings from a capped window, not the full generated stream.</p>{sensor_preview_table(preview["readings"])}</section>
+  </main>
+"""
+    return page("ColdChain Sentinel Sensor Lab", body)
+
+
+def system_status_json() -> dict[str, Any]:
+    return {
+        "appName": "ColdChain Sentinel",
+        "mode": "synthetic_hackathon_beta",
+        "caseCount": len(load_cases()),
+        "sensorLabAvailable": True,
+        "deterministicEngineAvailable": True,
+        "rulesTraceAvailable": True,
+        "auditPacketsAvailable": True,
+        "fireworksAuthoritative": False,
+        "autonomousActionsAllowed": False,
+        "realDataUsed": False,
+        "productionValidated": False,
+    }
+
+
+def render_beta_readiness() -> str:
+    status = system_status_json()
+    rows = table(
+        ["Capability", "Status"],
+        [[key, str(value).lower() if isinstance(value, bool) else str(value)] for key, value in status.items()],
+        "beta-readiness-table",
+    )
+    body = f"""
+  <header data-testid="beta-readiness-page">
+    {global_nav()}
+    <h1>Beta Readiness</h1>
+    <p>Synthetic hackathon beta status. No real-world operational decision is made.</p>
+  </header>
+  <main><section class="panel">{rows}</section></main>
+"""
+    return page("ColdChain Sentinel Beta Readiness", body)
+
+
 def render_case_detail(case_id: str) -> str:
     case = get_case(case_id)
     packet = case_packet(case)
@@ -337,6 +458,8 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     packet = case_packet(case, simulate_resolved)
     before_packet = case_packet(case)
     result = packet["result"]
+    sensors = sensor_summary(case, result)
+    sensor_preview = sensor_window(case, 0, 8)
     excursion = result["excursion"]
     mapped_table = table(
         ["Pallet", "Mapping state"],
@@ -514,6 +637,8 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     </section>
     <section class="panel" data-testid="manual-resolution-panel"><h2>Manual resolution simulation</h2><p>Current unresolved pallet: {html.escape(", ".join(before_packet["result"]["unresolvedPalletIds"]) or "None")}</p><div class="toolbar">{simulation_link}</div></section>
     <section class="panel" data-testid="case-excursion-panel"><h2>Excursion</h2>{excursion_html}</section>
+    {sensor_summary_panel(case_id, sensors)}
+    <section class="panel" data-testid="sensor-window-preview-panel"><h2>Sensor window preview</h2><p>Small deterministic sample window only; use JSON route with offset and capped limit for paging.</p>{sensor_preview_table(sensor_preview["readings"])}</section>
     <section class="panel" data-testid="synthetic-telemetry-timeline"><h2>Synthetic temperature timeline</h2><p>Threshold: {case["thresholdMaxC"]} C. Above-threshold readings are labeled as review signals.</p>{excursion_html}{telemetry}</section>
     <section class="panel" data-testid="evidence-timeline"><h2>Evidence timeline</h2><ul>{timeline}</ul></section>
     <section class="panel" data-testid="rule-trace-panel"><h2>Deterministic Rule Trace</h2><p>Rule trace is deterministic and does not depend on Fireworks.</p>{trace}</section>
@@ -640,6 +765,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             self.respond_text(render_dashboard())
             return
+        if path == "/sensor-lab":
+            self.respond_text(render_sensor_lab())
+            return
+        if path == "/sensor-lab.json":
+            self.respond_json(sensor_lab_payload())
+            return
+        if path == "/beta-readiness":
+            self.respond_text(render_beta_readiness())
+            return
+        if path == "/system-status.json":
+            self.respond_json(system_status_json())
+            return
         if path == "/cases":
             self.respond_text(render_cases())
             return
@@ -665,6 +802,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         return
                     if parts[2] == "audit.md":
                         self.respond_markdown(audit_markdown(get_case(selected), simulate_resolved))
+                        return
+                    if parts[2] == "sensor-summary.json":
+                        packet = case_packet(get_case(selected), simulate_resolved)
+                        self.respond_json(sensor_summary(get_case(selected), packet["result"]))
+                        return
+                    if parts[2] == "sensor-window.json":
+                        try:
+                            offset = int(query.get("offset", ["0"])[0])
+                            limit = int(query.get("limit", ["100"])[0])
+                        except ValueError:
+                            self.respond_json({"error": "offset and limit must be integers"})
+                            return
+                        self.respond_json(sensor_window(get_case(selected), offset, limit))
                         return
                 except KeyError:
                     self.respond_text(render_not_found(parts[1]), 404)

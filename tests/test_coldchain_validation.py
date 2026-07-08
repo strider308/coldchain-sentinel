@@ -19,6 +19,7 @@ sys.path.insert(0, str(SRC))
 import ai_review_assistant  # noqa: E402
 from case_engine import case_packet, get_case, load_cases  # noqa: E402
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture  # noqa: E402
+from sensor_engine import sensor_summary, sensor_window, synthetic_readings  # noqa: E402
 from serve_dashboard import DashboardHandler, render_ai_review, render_dashboard, render_review_packet  # noqa: E402
 
 
@@ -140,6 +141,8 @@ def test_routes(case: dict[str, Any]) -> None:
         ai_review_status, ai_review = fetch(base_url, "/ai-review")
         ai_review_json_status, ai_review_json = fetch(base_url, "/ai-review.json")
         cases_status, cases_page = fetch(base_url, "/cases")
+        sensor_lab_status, sensor_lab = fetch(base_url, "/sensor-lab")
+        sensor_lab_json_status, sensor_lab_json = fetch(base_url, "/sensor-lab.json")
         baseline_case_status, baseline_case = fetch(base_url, "/cases/blocked-unresolved-pallet")
         baseline_case_review_status, baseline_case_review = fetch(base_url, "/cases/blocked-unresolved-pallet/review")
         simulated_status, simulated_review = fetch(
@@ -149,6 +152,15 @@ def test_routes(case: dict[str, Any]) -> None:
         baseline_evidence_status, baseline_evidence = fetch(base_url, "/cases/blocked-unresolved-pallet/evidence.json")
         baseline_export_status, baseline_export = fetch(base_url, "/cases/blocked-unresolved-pallet/export.md")
         baseline_audit_status, baseline_audit = fetch(base_url, "/cases/blocked-unresolved-pallet/audit.md")
+        baseline_sensor_summary_status, baseline_sensor_summary = fetch(
+            base_url, "/cases/blocked-unresolved-pallet/sensor-summary.json"
+        )
+        baseline_sensor_window_status, baseline_sensor_window = fetch(
+            base_url, "/cases/blocked-unresolved-pallet/sensor-window.json"
+        )
+        capped_sensor_window_status, capped_sensor_window = fetch(
+            base_url, "/cases/blocked-unresolved-pallet/sensor-window.json?offset=0&limit=900"
+        )
         simulated_export_status, simulated_export = fetch(
             base_url, "/cases/blocked-unresolved-pallet/export.md?simulateResolved=true"
         )
@@ -156,6 +168,8 @@ def test_routes(case: dict[str, Any]) -> None:
             base_url, "/cases/blocked-unresolved-pallet/audit.md?simulateResolved=true"
         )
         missing_status, missing_page = fetch_any(base_url, "/cases/not-a-case")
+        beta_status, beta_page = fetch(base_url, "/beta-readiness")
+        system_status_code, system_status_json = fetch(base_url, "/system-status.json")
         health_status, health_json = fetch(base_url, "/health")
     finally:
         server.shutdown()
@@ -168,6 +182,8 @@ def test_routes(case: dict[str, Any]) -> None:
     assert ai_review_status == 200
     assert ai_review_json_status == 200
     assert cases_status == 200
+    assert sensor_lab_status == 200
+    assert sensor_lab_json_status == 200
     assert baseline_case_status == 200
     assert baseline_case_review_status == 200
     assert simulated_status == 200
@@ -175,9 +191,14 @@ def test_routes(case: dict[str, Any]) -> None:
     assert baseline_evidence_status == 200
     assert baseline_export_status == 200
     assert baseline_audit_status == 200
+    assert baseline_sensor_summary_status == 200
+    assert baseline_sensor_window_status == 200
+    assert capped_sensor_window_status == 200
     assert simulated_export_status == 200
     assert simulated_audit_status == 200
     assert missing_status == 404
+    assert beta_status == 200
+    assert system_status_code == 200
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
     assert "Final disposition blocked." in review
@@ -186,6 +207,9 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Displayed brief source: deterministic_fallback" in ai_review
     assert "AI-assisted explanation only." in ai_review
     assert "Synthetic Case Workspace" in cases_page
+    assert "ColdChain Sentinel does not ask reviewers to inspect every reading." in sensor_lab
+    assert "large synthetic sensor stream" in sensor_lab
+    assert "Sensor Lab" in sensor_lab
     assert 'data-testid="global-nav"' in dashboard
     assert 'data-testid="global-nav"' in cases_page
     assert 'data-testid="global-nav"' in baseline_case_review
@@ -220,6 +244,9 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Synthetic temperature timeline" in baseline_case_review
     assert "Threshold: 8.0 C" in baseline_case_review
     assert "Above threshold - review signal" in baseline_case_review
+    assert "Large Sensor Data Summary" in baseline_case_review
+    assert "Total readings represented: 13824" in baseline_case_review
+    assert "Sensor window preview" in baseline_case_review
     assert "REVIEW_PACKET_COMPLETE" in simulated_review
     assert "MAPPING_REVIEW_SIMULATED" in simulated_review
     assert "PAL-SYN-1004 is synthetically mapped" in simulated_review
@@ -239,6 +266,8 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "## Simulated Resolution" in simulated_export
     assert "After reviewStatus: REVIEW_PACKET_COMPLETE" in simulated_export
     assert "## Audit Simulation Details" in simulated_audit
+    assert "## High-Volume Sensor Aggregation Summary" in baseline_audit
+    assert "Generated readings represented: 13824" in baseline_audit
     assert "Case not found" in missing_page
     assert "not-a-case" in missing_page
     assert "blocked-unresolved-pallet" in missing_page
@@ -265,11 +294,30 @@ def test_routes(case: dict[str, Any]) -> None:
 
     evidence = json.loads(baseline_evidence)
     trace = json.loads(baseline_trace)
+    sensor_summary_json = json.loads(baseline_sensor_summary)
+    sensor_window_json = json.loads(baseline_sensor_window)
+    capped_window_json = json.loads(capped_sensor_window)
+    sensor_lab_payload = json.loads(sensor_lab_json)
+    system_status = json.loads(system_status_json)
     assert evidence["caseId"] == "blocked-unresolved-pallet"
     assert evidence["result"]["finalDisposition"] == "BLOCKED"
     assert evidence["result"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
     assert trace["result"]["excursion"]["durationMinutes"] == 45
     assert "TEMP_THRESHOLD_CHECK" in {row["ruleId"] for row in trace["trace"]}
+    assert trace["sensorAggregationReference"]["generatedReadingCount"] == 13824
+    assert sensor_summary_json["syntheticOnly"] is True
+    assert sensor_summary_json["generatedReadingCount"] == 13824
+    assert sensor_summary_json["excursionWindows"][0]["durationMinutes"] == 45
+    assert sensor_summary_json["impactedZones"] == ["Z1"]
+    assert sensor_summary_json["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+    assert len(sensor_window_json["readings"]) <= 100
+    assert capped_window_json["limit"] == 500
+    assert all("qualityLabel" in row for row in sensor_window_json["readings"])
+    assert sensor_lab_payload["syntheticOnly"] is True
+    assert system_status["realDataUsed"] is False
+    assert system_status["autonomousActionsAllowed"] is False
+    assert system_status["fireworksAuthoritative"] is False
+    assert "synthetic_hackathon_beta" in beta_page
 
 
 def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
@@ -286,6 +334,8 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             evidence_status, evidence_json = fetch(base_url, f"/cases/{case_id}/evidence.json")
             export_status, export_md = fetch(base_url, f"/cases/{case_id}/export.md")
             audit_status, audit_md = fetch(base_url, f"/cases/{case_id}/audit.md")
+            sensor_summary_status, sensor_summary_text = fetch(base_url, f"/cases/{case_id}/sensor-summary.json")
+            sensor_window_status, sensor_window_text = fetch(base_url, f"/cases/{case_id}/sensor-window.json")
             ai_status, ai_page = fetch(base_url, f"/ai-review?caseId={case_id}")
             ai_json_status, ai_json = fetch(base_url, f"/ai-review.json?caseId={case_id}")
 
@@ -295,6 +345,8 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert evidence_status == 200
             assert export_status == 200
             assert audit_status == 200
+            assert sensor_summary_status == 200
+            assert sensor_window_status == 200
             assert ai_status == 200
             assert ai_json_status == 200
             assert "Reviewer checklist" in review_page
@@ -305,6 +357,7 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert "Deterministic Rule Trace" in review_page
             assert "Rule trace is deterministic and does not depend on Fireworks." in review_page
             assert "Synthetic temperature timeline" in review_page
+            assert "Large Sensor Data Summary" in review_page
             assert "Threshold:" in review_page
             assert "AUTONOMOUS_ACTIONS_DISABLED" in review_page
             assert "SYNTHETIC_ONLY" in review_page
@@ -321,6 +374,7 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert "## Deterministic Rule Trace" in audit_md
             assert "## Synthetic Telemetry Summary" in audit_md
             assert "## Reviewer Local Notes" in audit_md
+            assert "## High-Volume Sensor Aggregation Summary" in audit_md
             assert "Fireworks output is optional, quality-gated, and non-authoritative." in audit_md
             for page_text in (review_page, export_md, audit_md):
                 lowered = page_text.lower()
@@ -336,9 +390,15 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert trace["result"]["autonomousActionsAllowed"] is False
             assert trace["safetyDisclaimers"]
             evidence = json.loads(evidence_json)
+            sensor_case_summary = json.loads(sensor_summary_text)
+            sensor_case_window = json.loads(sensor_window_text)
             assert evidence["result"]["autonomousActionsAllowed"] is False
             assert evidence["telemetryTimeline"]
             assert evidence["trace"]
+            assert sensor_case_summary["deterministicResult"]["autonomousActionsAllowed"] is False
+            assert sensor_case_summary["generatedReadingCount"] == 13824
+            assert len(sensor_case_window["readings"]) <= 100
+            assert all(row["qualityLabel"].startswith("SENSOR_") for row in sensor_case_window["readings"])
             ai_packet = json.loads(ai_json)
             assert ai_packet["deterministicResult"]["autonomousActionsAllowed"] is False
             assert ai_packet["deterministicResult"] == case_packet(get_case(case_id))["result"]
@@ -359,21 +419,39 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
     assert "TEMP_THRESHOLD_CHECK" in {row["ruleId"] for row in baseline_packet["ruleTrace"]}
 
     fully_mapped = case_packet(get_case("excursion-fully-mapped"))["result"]
+    fully_mapped_sensor = sensor_summary(get_case("excursion-fully-mapped"), fully_mapped)
     assert fully_mapped["excursion"] is not None
     assert fully_mapped["unresolvedPalletIds"] == []
     assert fully_mapped["autonomousActionsAllowed"] is False
+    assert fully_mapped_sensor["excursionWindows"]
+    assert fully_mapped_sensor["unresolvedPalletIds"] == []
 
     control = case_packet(get_case("no-excursion-control"))["result"]
+    control_sensor = sensor_summary(get_case("no-excursion-control"), control)
     assert control["excursion"] is None
     assert control["autonomousActionsAllowed"] is False
     assert "RELEASE" not in control["finalDisposition"]
     assert "APPROVAL" not in control["finalDisposition"]
+    assert control_sensor["excursionWindows"] == []
 
     simulated = case_packet(get_case("blocked-unresolved-pallet"), simulate_resolved=True)["result"]
     assert simulated["unresolvedPalletIds"] == []
     assert simulated["reviewStatus"] == "REVIEW_PACKET_COMPLETE"
     assert simulated["finalDisposition"] == "MAPPING_REVIEW_SIMULATED"
     assert simulated["autonomousActionsAllowed"] is False
+
+
+def test_sensor_generator_deterministic() -> None:
+    case = get_case("blocked-unresolved-pallet")
+    first = synthetic_readings(case)[:20]
+    second = synthetic_readings(case)[:20]
+    summary = sensor_summary(case, case_packet(case)["result"])
+    assert first == second
+    assert summary["generatedReadingCount"] == 13824
+    assert summary["excursionWindows"][0]["durationMinutes"] == 45
+    assert summary["impactedZones"] == ["Z1"]
+    assert summary["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+    assert sensor_window(case, 0, 900)["limit"] == 500
 
 
 class FakeResponse:
@@ -645,6 +723,7 @@ def main() -> None:
         test_deterministic_baseline(case)
         test_review_packet(case)
         test_rendered_pages(case)
+        test_sensor_generator_deterministic()
         test_routes(case)
         test_case_routes_and_invariants(case)
         test_fireworks_missing_key_fallback(case)
