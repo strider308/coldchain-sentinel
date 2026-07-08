@@ -179,6 +179,7 @@ def test_routes(case: dict[str, Any]) -> None:
         missing_status, missing_page = fetch_any(base_url, "/cases/not-a-case")
         beta_status, beta_page = fetch(base_url, "/beta-readiness")
         validation_status, validation_page = fetch(base_url, "/validation-evidence")
+        validation_json_status, validation_json = fetch(base_url, "/validation-evidence.json")
         system_status_code, system_status_json = fetch(base_url, "/system-status.json")
         health_status, health_json = fetch(base_url, "/health")
     finally:
@@ -218,6 +219,7 @@ def test_routes(case: dict[str, Any]) -> None:
     assert missing_status == 404
     assert beta_status == 200
     assert validation_status == 200
+    assert validation_json_status == 200
     assert system_status_code == 200
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
@@ -233,6 +235,8 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "No real data" in command_center
     assert "No autonomous operational actions" in command_center
     assert "Deterministic fallback remains authoritative" in command_center
+    assert "Final demo flow" in command_center
+    assert "/validation-evidence" in command_center
     assert "Final disposition blocked." in review
     assert "Fireworks call succeeded: no" in ai_review
     assert "Structured output verified: no" in ai_review
@@ -345,6 +349,7 @@ def test_routes(case: dict[str, Any]) -> None:
     pipeline_payload = json.loads(data_pipeline_json)
     benchmark_payload = json.loads(model_benchmark_json)
     system_status = json.loads(system_status_json)
+    validation_payload = json.loads(validation_json)
     assert evidence["caseId"] == "blocked-unresolved-pallet"
     assert evidence["result"]["finalDisposition"] == "BLOCKED"
     assert evidence["result"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
@@ -407,12 +412,25 @@ def test_routes(case: dict[str, Any]) -> None:
     assert system_status["sensorLabAvailable"] is True
     assert system_status["reviewWorkspaceAvailable"] is True
     assert system_status["betaTotalGeneratedReadings"] == 41472
+    assert validation_payload["realDataUsed"] is False
+    assert validation_payload["autonomousActionsAllowed"] is False
+    assert validation_payload["fireworksAuthoritative"] is False
+    assert validation_payload["sersAdvisoryOnly"] is True
+    assert validation_payload["deterministicRulesAuthoritative"] is True
+    assert validation_payload["productionValidated"] is False
+    assert "/command-center" in validation_payload["routeChecklist"]
     assert "synthetic_hackathon_beta" in beta_page
     assert "Sensor lab available" in beta_page
     assert "No real data" in beta_page
     assert "No autonomous actions" in beta_page
     assert "Validation Evidence" in validation_page
     assert "Docker route smoke" in validation_page
+    assert "Deterministic rules authoritative" in validation_page
+    assert "Fireworks safety gate" in validation_page
+    assert "SERS advisory-only" in validation_page
+    assert "No real data" in validation_page
+    assert "No autonomous action" in validation_page
+    assert "run manually after Render deploy" in validation_page
 
 
 def test_case_routes_and_invariants(case: dict[str, Any]) -> None:

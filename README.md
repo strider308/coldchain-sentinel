@@ -149,12 +149,37 @@ http://127.0.0.1:18080/
 - `/beta-readiness` - synthetic beta capability status page.
 - `/system-status.json` - machine-readable beta safety/status flags.
 - `/validation-evidence` - non-secret local validation evidence page.
+- `/validation-evidence.json` - machine-readable validation and safety checklist.
 
 `/ai-review` and `/ai-review.json` accept an optional `caseId` query parameter for the synthetic cases, for example `/ai-review?caseId=excursion-fully-mapped`.
 
 ## Recommended Demo Flow
 
 Start at `/command-center` for the full platform summary. From there, open `/sensor-lab`, `/data-pipeline`, `/model-benchmark`, `/cases/blocked-unresolved-pallet/review`, and `/ai-review` to inspect each layer.
+
+Final judge/investor flow:
+
+1. `/command-center` - complete beta overview.
+2. `/sensor-lab` - high-volume synthetic telemetry.
+3. `/data-pipeline` - raw readings to review packet.
+4. `/model-benchmark` - deterministic synthetic benchmark against simple baselines.
+5. `/cases/blocked-unresolved-pallet/review` - reviewer workspace and deterministic facts.
+6. `/cases/blocked-unresolved-pallet/audit.md` - audit-style packet.
+7. `/ai-review` - Fireworks safety gate and deterministic fallback.
+8. `/system-status.json` and `/validation-evidence` - readiness and validation evidence.
+
+## What The App Proves
+
+- High-volume synthetic sensor readings can be generated deterministically from compact local config.
+- Cleaning, redundancy consensus, SERS advisory scoring, deterministic rule traces, and audit packets can be connected in one reviewer workflow.
+- Fireworks can assist explanations while deterministic rules remain authoritative.
+
+## What The App Does Not Claim
+
+- No real-world operational decision.
+- No production readiness.
+- No medical, pharma, logistics, or compliance validation.
+- No real-world superiority claim; benchmark wording is limited to deterministic synthetic data and simple baselines.
 
 ## Current Beta Capabilities
 
@@ -313,6 +338,32 @@ No AMD or Fireworks credentials are required for the deterministic container dem
 - Operational approval, release, quarantine, discard, reroute, or customer-notification controls.
 - AMD integration or AMD success claims.
 - Production readiness, medical validation, pharmaceutical validation, or compliance certification.
+
+## Post-Hackathon Roadmap
+
+Phase 1:
+
+- Real dataset ingestion after license/TOS review.
+- Schema adapters.
+- Stronger model evaluation.
+
+Phase 2:
+
+- Database.
+- Authenticated workspaces.
+- Role-based review flows.
+
+Phase 3:
+
+- Real sensor integrations.
+- Customer pilots.
+- Compliance/legal review.
+
+Phase 4:
+
+- Production monitoring.
+- Enterprise audit logs.
+- Customer-specific models.
 
 ## Submission Checklist
 

@@ -280,6 +280,7 @@ def command_center_payload() -> dict[str, Any]:
             "auditPacket": "/cases/blocked-unresolved-pallet/audit.md",
             "aiReview": "/ai-review",
             "systemStatus": "/system-status.json",
+            "validationEvidence": "/validation-evidence",
         },
         "safetyDisclaimers": [
             "Synthetic data only.",
@@ -464,6 +465,11 @@ def render_command_center() -> str:
       <article class="panel status-block" data-testid="command-review-summary"><h2>Deterministic review packet summary</h2><p>Shipment ID: {html.escape(review["shipmentId"])}. finalDisposition: {html.escape(review["finalDisposition"])}. reviewStatus: {html.escape(review["reviewStatus"])}.</p><p>Unresolved pallet IDs: {html.escape(", ".join(review["unresolvedPalletIds"]) or "None")}. autonomousActionsAllowed: {str(review["autonomousActionsAllowed"]).lower()}.</p><ul>{blockers}</ul><div class="toolbar"><a class="button" href="/cases/blocked-unresolved-pallet/review">Review</a><a class="button" href="/cases/blocked-unresolved-pallet/trace.json">Trace JSON</a><a class="button" href="/cases/blocked-unresolved-pallet/audit.md">Audit packet</a></div></article>
       <article class="panel" data-testid="command-fireworks-summary"><h2>Fireworks safety-gate summary</h2><p>Fireworks configured: {str(fireworks["fireworksConfigured"]).lower()}. Fireworks authoritative: false.</p><p>Model output is validated, sanitized, or rejected. Deterministic fallback remains authoritative.</p><div class="toolbar"><a class="button" href="/ai-review">AI Review</a><a class="button" href="/ai-review.json">AI JSON</a></div></article>
       <article class="panel status-block" data-testid="command-readiness-summary"><h2>Readiness and safety summary</h2><p>No real data: {str(not readiness["realDataUsed"]).lower()}. No autonomous operational actions: {str(not readiness["autonomousActionsAllowed"]).lower()}. Not production/compliance validated: {str(not readiness["productionValidated"]).lower()}.</p><p>Synthetic hackathon/investor beta. Deterministic rules remain authoritative.</p><div class="toolbar"><a class="button" href="/beta-readiness">Beta Readiness</a><a class="button" href="/system-status.json">System Status</a><a class="button" href="/public-data-readiness">Public Data Readiness</a></div></article>
+    </section>
+    <section class="panel" data-testid="final-demo-flow">
+      <h2>Final demo flow</h2>
+      <p>Use this path to validate the beta without inspecting every route manually.</p>
+      <div class="toolbar"><a class="button" href="/sensor-lab">Sensor Lab</a><a class="button" href="/data-pipeline">Data Pipeline</a><a class="button" href="/model-benchmark">Model Benchmark</a><a class="button" href="/cases/blocked-unresolved-pallet/review">Review Workspace</a><a class="button" href="/cases/blocked-unresolved-pallet/audit.md">Audit Packet</a><a class="button" href="/ai-review">AI Review</a><a class="button" href="/system-status.json">System Status</a><a class="button" href="/validation-evidence">Validation Evidence</a></div>
     </section>
   </main>
 """
@@ -650,15 +656,70 @@ def render_beta_readiness() -> str:
     return page("ColdChain Sentinel Beta Readiness", body)
 
 
+def validation_evidence_json() -> dict[str, Any]:
+    return {
+        "appName": "ColdChain Sentinel",
+        "mode": "synthetic_hackathon_investor_beta",
+        "routeChecklist": [
+            "/",
+            "/command-center",
+            "/sensor-lab",
+            "/data-pipeline",
+            "/model-benchmark",
+            "/public-data-readiness",
+            "/cases/blocked-unresolved-pallet/review",
+            "/cases/blocked-unresolved-pallet/audit.md",
+            "/system-status.json",
+            "/validation-evidence",
+            "/ai-review",
+            "/health",
+        ],
+        "validationChecklist": [
+            "python src/coldchain_baseline.py",
+            "python src/ai_review_assistant.py",
+            "python src/serve_dashboard.py --check",
+            "python tests/test_coldchain_validation.py",
+            "docker build -t coldchain-sentinel-release-hardening:local .",
+            "Docker route smoke checklist",
+        ],
+        "securityChecklist": ["Gitleaks", "TruffleHog", "unsafe-claim scan"],
+        "safetyDisclaimers": [
+            "Synthetic data only.",
+            "No real customer, patient, pharma, logistics, sensor, or shipment data.",
+            "Deterministic rules are authoritative.",
+            "Fireworks is optional and non-authoritative.",
+            "SERS predictions are advisory only.",
+            "No autonomous operational action.",
+            "Not production, medical, pharma, or compliance validated.",
+        ],
+        "deterministicRulesAuthoritative": True,
+        "fireworksAuthoritative": False,
+        "sersAdvisoryOnly": True,
+        "realDataUsed": False,
+        "autonomousActionsAllowed": False,
+        "productionValidated": False,
+    }
+
+
 def render_validation_evidence() -> str:
+    payload = validation_evidence_json()
     rows = table(
         ["Evidence", "Status"],
         [
+            ["App mode", payload["mode"]],
+            ["Public repo", "https://github.com/strider308/coldchain-sentinel"],
+            ["Live app", "https://coldchain-sentinel-35ex.onrender.com"],
             ["Local Python validation", "passed before commit"],
             ["Docker route smoke", "passed locally before commit"],
             ["Gitleaks filesystem scan", "passed before commit"],
             ["TruffleHog filesystem scan", "passed before commit"],
             ["Unsafe-claim scan", "passed with only test/safety-filter matches"],
+            ["Fireworks safety gate", "optional, validated/sanitized/rejected, non-authoritative"],
+            ["Deterministic rules authoritative", str(payload["deterministicRulesAuthoritative"]).lower()],
+            ["SERS advisory-only", str(payload["sersAdvisoryOnly"]).lower()],
+            ["No real data", str(not payload["realDataUsed"]).lower()],
+            ["No autonomous action", str(not payload["autonomousActionsAllowed"]).lower()],
+            ["Known limitations", "synthetic beta; no external datasets, database, auth, or production/compliance validation"],
             ["Live route smoke", "run manually after Render deploy"],
         ],
         "validation-evidence-table",
@@ -669,7 +730,7 @@ def render_validation_evidence() -> str:
     <h1>Validation Evidence</h1>
     <p>Non-secret validation evidence for the synthetic hackathon beta. Live validation is not claimed until the deployed service is checked.</p>
   </header>
-  <main><section class="panel">{rows}</section></main>
+  <main><section class="panel">{rows}<div class="toolbar"><a class="button" href="/validation-evidence.json">Validation JSON</a><a class="button" href="/command-center">Command Center</a></div></section></main>
 """
     return page("ColdChain Sentinel Validation Evidence", body)
 
@@ -1117,6 +1178,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/validation-evidence":
             self.respond_text(render_validation_evidence())
+            return
+        if path == "/validation-evidence.json":
+            self.respond_json(validation_evidence_json())
             return
         if path == "/data-pipeline":
             self.respond_text(render_data_pipeline())
