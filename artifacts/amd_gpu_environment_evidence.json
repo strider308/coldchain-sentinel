@@ -1,0 +1,32 @@
+﻿{
+  "amdGpuEvidenceStatus": "AMD_GPU_VERIFIED",
+  "gpuVerified": true,
+  "rocmSmiAvailable": true,
+  "rocminfoAvailable": true,
+  "torchCudaAvailable": true,
+  "torchVersion": "2.9.1+gitff65f5b",
+  "device": "cuda",
+  "deviceCount": 1,
+  "deviceName": "",
+  "deviceNameNote": "PyTorch returned an empty device name; do not claim a specific GPU model.",
+  "matrixBenchmark": {
+    "matrixSize": 4096,
+    "iterations": 10,
+    "elapsedSeconds": 0.5348703861236572
+  },
+  "syntheticOnly": true,
+  "realDataUsed": false,
+  "productionValidated": false,
+  "claimsAllowed": [
+    "AMD ROCm/PyTorch GPU execution verified in the notebook environment.",
+    "A synthetic matrix benchmark ran on the CUDA-compatible ROCm device path."
+  ],
+  "claimsNotAllowed": [
+    "Specific AMD GPU model verified.",
+    "SERS GPU training completed.",
+    "CPU-vs-GPU speedup proven.",
+    "Production ML acceleration validated.",
+    "Real-world cold-chain model trained.",
+    "AMD GPU improved SERS accuracy."
+  ]
+}
