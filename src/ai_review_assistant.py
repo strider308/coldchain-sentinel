@@ -28,6 +28,8 @@ BRIEF_SCHEMA = {
 }
 MAX_TEXT = 240
 MAX_ITEMS = 5
+QUALITY_REJECT_STATUS = "Fireworks call succeeded; output rejected by quality gate; deterministic fallback shown."
+JSON_FRAGMENT_MARKERS = [f'"{key}":' for key in BRIEF_KEYS]
 UNSAFE_PHRASES = [
     "release shipment",
     "approve shipment",
@@ -144,9 +146,66 @@ def validate_brief(value: Any) -> dict[str, Any] | None:
     return brief
 
 
+def flattened_brief_values(brief: dict[str, Any]) -> list[str]:
+    values = [str(brief["summary"]), str(brief["safetyNote"])]
+    for key in ("whyBlocked", "missingEvidence", "reviewerChecklist", "rootCauseHypotheses"):
+        values.extend(str(item) for item in brief[key])
+    return values
+
+
+def quality_gate(brief: dict[str, Any]) -> bool:
+    values = flattened_brief_values(brief)
+    for value in values:
+        stripped = value.strip()
+        if any(marker in stripped for marker in JSON_FRAGMENT_MARKERS):
+            return False
+        if "{" in stripped or "}" in stripped:
+            return False
+        if stripped.startswith(('"', ",")) or stripped.endswith(('"', ",")):
+            return False
+        if len(stripped) > MAX_TEXT:
+            return False
+
+    normalized = [re.sub(r"\s+", " ", value.lower()).strip() for value in values if value.strip()]
+    return not any(normalized.count(value) >= 3 for value in set(normalized))
+
+
 def unsafe_text(value: str) -> bool:
     normalized = re.sub(r"\s+", " ", value.lower())
     return any(phrase in normalized for phrase in UNSAFE_PHRASES)
+
+
+def extracted_json_object(content: str) -> dict[str, Any] | None:
+    start = content.find("{")
+    while start != -1:
+        depth = 0
+        in_string = False
+        escaped = False
+        for index in range(start, len(content)):
+            char = content[index]
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        value = json.loads(content[start : index + 1])
+                    except json.JSONDecodeError:
+                        break
+                    return value if isinstance(value, dict) else None
+        start = content.find("{", start + 1)
+    return None
 
 
 def candidate_lines(content: str) -> list[str]:
@@ -170,6 +229,11 @@ def lines_with(lines: list[str], *needles: str) -> list[str]:
 def sanitize_fireworks_text(packet: dict[str, Any], content: str) -> dict[str, Any] | None:
     if unsafe_text(content):
         return None
+    embedded = extracted_json_object(content)
+    if embedded is not None:
+        brief = validate_brief(embedded)
+        return brief if brief is not None and quality_gate(brief) else None
+
     lines = candidate_lines(content)
     joined = " ".join(lines).lower()
     if "pal-syn-1004" not in joined and "temperature" not in joined and "human review" not in joined:
@@ -186,15 +250,17 @@ def sanitize_fireworks_text(packet: dict[str, Any], content: str) -> dict[str, A
     )
     brief = {
         "summary": summary,
-        "whyBlocked": lines_with(lines, "blocked", "temperature", "missing zone", "pal-syn-1004")
-        or fallback["whyBlocked"],
-        "missingEvidence": lines_with(lines, "missing", "pal-syn-1004") or fallback["missingEvidence"],
-        "reviewerChecklist": lines_with(lines, "confirm", "inspect", "resolve", "review") or fallback["reviewerChecklist"],
+        "whyBlocked": lines_with(lines, "blocked", "temperature excursion", "human review") or fallback["whyBlocked"],
+        "missingEvidence": lines_with(lines, "missing evidence", "not supplied", "zone mapping is missing")
+        or fallback["missingEvidence"],
+        "reviewerChecklist": lines_with(lines, "reviewer should", "confirm", "inspect", "resolve")
+        or fallback["reviewerChecklist"],
         "rootCauseHypotheses": lines_with(lines, "omitted", "not supplied", "missing mapping", "requires reviewer")
         or fallback["rootCauseHypotheses"],
         "safetyNote": "AI-assisted explanation only. Deterministic rules remain authoritative.",
     }
-    return validate_brief(brief)
+    brief = validate_brief(brief)
+    return brief if brief is not None and quality_gate(brief) else None
 
 
 def build_prompt(packet: dict[str, Any]) -> list[dict[str, str]]:
@@ -279,7 +345,7 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
         if brief is None:
             status = "Fireworks call succeeded; output rejected by safety filter; deterministic fallback shown."
             if not unsafe_text(content):
-                status = "Fireworks call succeeded; sanitizer could not extract a safe reviewer brief; deterministic fallback shown."
+                status = QUALITY_REJECT_STATUS
             return fallback_brief(packet, status, call_succeeded=True)
         return {
             "provider": provider_status(
@@ -294,10 +360,10 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
             "unstructuredAiResponse": "",
         }
 
-    if brief is None:
+    if brief is None or not quality_gate(brief):
         return fallback_brief(
             packet,
-            "Fireworks call succeeded; structured output missing required keys; deterministic fallback shown.",
+            QUALITY_REJECT_STATUS,
             call_succeeded=True,
         )
 

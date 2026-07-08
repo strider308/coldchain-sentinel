@@ -282,6 +282,76 @@ def test_fireworks_unstructured_text_sanitized(case: dict[str, Any]) -> None:
     assert review["deterministicResult"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
 
 
+def test_fireworks_embedded_json_object_sanitized(case: dict[str, Any]) -> None:
+    packet = build_review_packet(case)
+    embedded = {
+        "summary": "Shipment remains blocked pending human review.",
+        "whyBlocked": ["Temperature excursion detected.", "PAL-SYN-1004 has missing zone mapping."],
+        "missingEvidence": ["Missing zone mapping for PAL-SYN-1004."],
+        "reviewerChecklist": ["Resolve missing zone mapping for PAL-SYN-1004."],
+        "rootCauseHypotheses": ["Mapping feed omitted one pallet."],
+        "safetyNote": "AI-assisted explanation only. Deterministic rules remain authoritative.",
+        "finalDisposition": "RELEASED",
+    }
+    _, original = with_fake_fireworks("Here is the JSON:\n" + json.dumps(embedded))
+    old_key = os.environ.get("FIREWORKS_API_KEY")
+    os.environ["FIREWORKS_API_KEY"] = "test-key"
+    try:
+        review = ai_review_assistant.build_ai_review(packet)
+    finally:
+        restore_fireworks(original, old_key)
+
+    assert review["assistant"]["provider"]["displayedBriefSource"] == "sanitized_fireworks_text"
+    assert review["assistant"]["provider"]["fireworksCallSucceeded"] is True
+    assert review["assistant"]["provider"]["fireworksStructuredOutputVerified"] is False
+    assert review["assistant"]["brief"]["summary"] == "Shipment remains blocked pending human review."
+    assert "finalDisposition" not in review["assistant"]["brief"]
+    assert review["deterministicResult"]["finalDisposition"] == "BLOCKED"
+
+
+def test_fireworks_malformed_json_fragment_rejected(case: dict[str, Any]) -> None:
+    packet = build_review_packet(case)
+    text = '''
+    "summary":"Shipment SYN-SHIP-2026-06-26-A is blocked pending human review.",
+    "whyBlocked":["Temperature excursion detected.", "PAL-SYN-1004 has missing zone mapping."],
+    "missingEvidence":["PAL-SYN-1004 zone mapping"],
+    "reviewerChecklist":["Resolve missing mapping"],
+    '''
+    _, original = with_fake_fireworks(text)
+    old_key = os.environ.get("FIREWORKS_API_KEY")
+    os.environ["FIREWORKS_API_KEY"] = "test-key"
+    try:
+        review = ai_review_assistant.build_ai_review(packet)
+    finally:
+        restore_fireworks(original, old_key)
+
+    assert review["assistant"]["provider"]["fireworksCallSucceeded"] is True
+    assert review["assistant"]["provider"]["displayedBriefSource"] == "deterministic_fallback"
+    assert review["assistant"]["provider"]["status"] == ai_review_assistant.QUALITY_REJECT_STATUS
+    assert review["assistant"]["brief"] == ai_review_assistant.deterministic_brief(packet)
+
+
+def test_fireworks_repeated_low_quality_text_rejected(case: dict[str, Any]) -> None:
+    packet = build_review_packet(case)
+    repeated = (
+        "Shipment remains blocked because PAL-SYN-1004 has missing mapping and reviewer should resolve missing mapping."
+    )
+    text = "\n".join([repeated, repeated, repeated])
+    _, original = with_fake_fireworks(text)
+    old_key = os.environ.get("FIREWORKS_API_KEY")
+    os.environ["FIREWORKS_API_KEY"] = "test-key"
+    try:
+        review = ai_review_assistant.build_ai_review(packet)
+    finally:
+        restore_fireworks(original, old_key)
+
+    assert review["assistant"]["provider"]["fireworksCallSucceeded"] is True
+    assert review["assistant"]["provider"]["displayedBriefSource"] == "deterministic_fallback"
+    assert review["assistant"]["provider"]["fireworksStructuredOutputVerified"] is False
+    assert review["assistant"]["provider"]["status"] == ai_review_assistant.QUALITY_REJECT_STATUS
+    assert review["deterministicResult"]["reviewStatus"] == "HUMAN_REVIEW_REQUIRED"
+
+
 def test_fireworks_unsafe_text_rejected(case: dict[str, Any]) -> None:
     packet = build_review_packet(case)
     text = "The shipment can clear for use and is safe for distribution after review."
@@ -372,6 +442,9 @@ def main() -> None:
         test_fireworks_missing_key_fallback(case)
         test_fireworks_http_error_fallback(case)
         test_fireworks_unstructured_text_sanitized(case)
+        test_fireworks_embedded_json_object_sanitized(case)
+        test_fireworks_malformed_json_fragment_rejected(case)
+        test_fireworks_repeated_low_quality_text_rejected(case)
         test_fireworks_unsafe_text_rejected(case)
         test_fireworks_missing_required_json_key_fallback(case)
         test_fireworks_structured_json_accepted_and_non_authoritative(case)
