@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import threading
+import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -120,6 +121,13 @@ def fetch(base_url: str, path: str) -> tuple[int, str]:
         return response.status, response.read().decode("utf-8")
 
 
+def fetch_any(base_url: str, path: str) -> tuple[int, str]:
+    try:
+        return fetch(base_url, path)
+    except urllib.error.HTTPError as error:
+        return error.code, error.read().decode("utf-8")
+
+
 def test_routes(case: dict[str, Any]) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), DashboardHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -147,6 +155,7 @@ def test_routes(case: dict[str, Any]) -> None:
         simulated_audit_status, simulated_audit = fetch(
             base_url, "/cases/blocked-unresolved-pallet/audit.md?simulateResolved=true"
         )
+        missing_status, missing_page = fetch_any(base_url, "/cases/not-a-case")
         health_status, health_json = fetch(base_url, "/health")
     finally:
         server.shutdown()
@@ -168,6 +177,7 @@ def test_routes(case: dict[str, Any]) -> None:
     assert baseline_audit_status == 200
     assert simulated_export_status == 200
     assert simulated_audit_status == 200
+    assert missing_status == 404
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
     assert "Final disposition blocked." in review
@@ -176,12 +186,21 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Displayed brief source: deterministic_fallback" in ai_review
     assert "AI-assisted explanation only." in ai_review
     assert "Synthetic Case Workspace" in cases_page
+    assert 'data-testid="global-nav"' in dashboard
+    assert 'data-testid="global-nav"' in cases_page
+    assert 'data-testid="global-nav"' in baseline_case_review
+    assert 'class="global-nav"' in baseline_case_review
+    assert "@media (max-width: 640px)" in baseline_case_review
     for case_id in ("blocked-unresolved-pallet", "excursion-fully-mapped", "no-excursion-control"):
         assert case_id in cases_page
     assert cases_page.count("<td>false</td>") >= 3
     assert "Blocked excursion with unresolved pallet" in baseline_case
     assert "Reviewer checklist" in baseline_case_review
     assert "0/4 reviewed" in baseline_case_review
+    assert "BLOCKED" in baseline_case_review
+    assert "HUMAN_REVIEW_REQUIRED" in baseline_case_review
+    assert "AUTONOMOUS_ACTIONS_DISABLED" in baseline_case_review
+    assert "SYNTHETIC_ONLY" in baseline_case_review
     assert "localStorage" in baseline_case_review
     assert "Local demo notes only. Not uploaded, not persisted server-side." in baseline_case_review
     assert "Packet completeness" in baseline_case_review
@@ -192,11 +211,15 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "/ai-review?caseId=blocked-unresolved-pallet" in baseline_case_review
     assert "/ai-review.json?caseId=blocked-unresolved-pallet" in baseline_case_review
     assert "/cases/blocked-unresolved-pallet/audit.md" in baseline_case_review
+    assert "/cases/blocked-unresolved-pallet/audit.md?simulateResolved=true" in baseline_case_review
     assert "2026-06-26 10:30 UTC" in baseline_case_review
     assert "2026-06-26 11:15 UTC" in baseline_case_review
     assert "Duration: 45 minutes" in baseline_case_review
     assert "Deterministic Rule Trace" in baseline_case_review
+    assert "Rule trace is deterministic and does not depend on Fireworks." in baseline_case_review
     assert "Synthetic temperature timeline" in baseline_case_review
+    assert "Threshold: 8.0 C" in baseline_case_review
+    assert "Above threshold - review signal" in baseline_case_review
     assert "REVIEW_PACKET_COMPLETE" in simulated_review
     assert "MAPPING_REVIEW_SIMULATED" in simulated_review
     assert "PAL-SYN-1004 is synthetically mapped" in simulated_review
@@ -216,6 +239,10 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "## Simulated Resolution" in simulated_export
     assert "After reviewStatus: REVIEW_PACKET_COMPLETE" in simulated_export
     assert "## Audit Simulation Details" in simulated_audit
+    assert "Case not found" in missing_page
+    assert "not-a-case" in missing_page
+    assert "blocked-unresolved-pallet" in missing_page
+    assert "/cases" in missing_page
 
     packet = json.loads(review_json)
     assert packet == build_review_packet(case)
@@ -276,7 +303,15 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert "Review session summary" in review_page
             assert "No autonomous operational action." in review_page
             assert "Deterministic Rule Trace" in review_page
+            assert "Rule trace is deterministic and does not depend on Fireworks." in review_page
             assert "Synthetic temperature timeline" in review_page
+            assert "Threshold:" in review_page
+            assert "AUTONOMOUS_ACTIONS_DISABLED" in review_page
+            assert "SYNTHETIC_ONLY" in review_page
+            assert "/evidence.json" in review_page
+            assert "/trace.json" in review_page
+            assert "/export.md" in review_page
+            assert "/audit.md" in review_page
             assert f"Selected case: {case_id}" in ai_page
             assert "Fireworks may provide an optional non-authoritative reviewer explanation only." in export_md
             assert "quality-gated" in export_md

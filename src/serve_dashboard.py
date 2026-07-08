@@ -25,6 +25,49 @@ def badge(text: str, tone: str = "neutral") -> str:
     return f'<span class="badge badge-{tone}">{html.escape(text)}</span>'
 
 
+def global_nav() -> str:
+    return (
+        '<nav class="global-nav" data-testid="global-nav">'
+        '<a href="/">Home</a><a href="/cases">Cases</a><a href="/review" data-testid="review-packet-link">Baseline Review</a>'
+        '<a href="/ai-review" data-testid="ai-review-link">AI Review</a><a href="/health">Health</a>'
+        '<a href="https://github.com/strider308/coldchain-sentinel">GitHub repo</a>'
+        "</nav>"
+    )
+
+
+def status_badges(result: dict[str, Any], extra: list[str] | None = None) -> str:
+    disposition = result["finalDisposition"]
+    if disposition == "NO_EXCURSION_CONTROL":
+        disposition = "DEMO_CONTROL_NO_EXCURSION"
+    labels = [
+        disposition,
+        result["reviewStatus"],
+        "AUTONOMOUS_ACTIONS_DISABLED",
+        "SYNTHETIC_ONLY",
+    ]
+    labels.extend(extra or [])
+    return "".join(badge(label, "danger" if label == "BLOCKED" else "warn") for label in labels)
+
+
+def render_not_found(case_id: str | None = None) -> str:
+    case_ids = [case["caseId"] for case in load_cases()]
+    body = f"""
+  <header data-testid="not-found-page">
+    {global_nav()}
+    <h1>Case not found</h1>
+    <p>No synthetic case matched: {html.escape(case_id or "unknown")}.</p>
+  </header>
+  <main>
+    <section class="panel">
+      <h2>Available synthetic cases</h2>
+      <ul>{items(case_ids, "available-case")}</ul>
+      <p><a class="button" href="/cases">Back to cases</a></p>
+    </section>
+  </main>
+"""
+    return page("Case not found", body)
+
+
 def items(values: list[str], test_prefix: str) -> str:
     return "\n".join(
         f'<li data-testid="{html.escape(test_prefix)}-{html.escape(value)}">{html.escape(value)}</li>' for value in values
@@ -40,11 +83,12 @@ def timeline_items(values: list[dict[str, str]]) -> str:
 
 def trace_table(values: list[dict[str, Any]]) -> str:
     return table(
-        ["Rule", "Status", "Explanation", "Evidence IDs", "Safety impact"],
+        ["Status", "Rule", "Input", "Output", "Evidence IDs", "Safety impact"],
         [
             [
-                row["ruleName"],
                 row["status"],
+                row["ruleName"],
+                row["inputSummary"],
                 row["outputSummary"],
                 ", ".join(row["evidenceIds"]) or "None",
                 row["safetyImpact"],
@@ -55,15 +99,16 @@ def trace_table(values: list[dict[str, Any]]) -> str:
     )
 
 
-def telemetry_table(values: list[dict[str, Any]]) -> str:
+def telemetry_table(values: list[dict[str, Any]], threshold: float) -> str:
     return table(
-        ["Timestamp", "Temperature", "Zone", "Threshold exceeded?", "Evidence ID"],
+        ["Timestamp", "Temperature", "Threshold", "Zone", "State", "Evidence ID"],
         [
             [
                 row["timestampUtc"],
                 f'{row["temperatureC"]} C',
+                f"{threshold} C",
                 row["zoneId"],
-                str(row["thresholdExceeded"]).lower(),
+                "Above threshold - review signal" if row["thresholdExceeded"] else "Within synthetic threshold",
                 row["evidenceId"],
             ]
             for row in values
@@ -103,6 +148,8 @@ def page(title: str, body: str) -> str:
     header {{ padding: 28px clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--line); background: var(--panel); }}
     main {{ width: min(1120px, 100%); margin: 0 auto; padding: 24px clamp(16px, 4vw, 32px) 40px; }}
     nav a {{ color: var(--accent); font-weight: 700; margin-right: 16px; }}
+    .global-nav {{ display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }}
+    .global-nav a {{ margin-right: 0; }}
     h1 {{ margin: 0 0 8px; font-size: clamp(28px, 4vw, 42px); }}
     h2 {{ margin: 0 0 12px; font-size: 20px; }}
     p {{ margin: 0 0 12px; }}
@@ -125,6 +172,13 @@ def page(title: str, body: str) -> str:
     .toolbar {{ display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }}
     .check-row {{ display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }}
     .check-row input {{ margin-top: 4px; }}
+    @media (max-width: 640px) {{
+      header {{ padding: 18px 14px; }}
+      main {{ padding: 16px 12px 28px; }}
+      .grid {{ grid-template-columns: 1fr; }}
+      table {{ display: block; overflow-x: auto; white-space: nowrap; }}
+      .button {{ width: 100%; text-align: center; }}
+    }}
   </style>
 </head>
 <body>{body}</body>
@@ -156,9 +210,9 @@ def render_dashboard(case: dict[str, Any] | None = None) -> str:
 
     body = f"""
   <header data-testid="demo-overview">
+    {global_nav()}
     <h1>ColdChain Sentinel</h1>
     <p data-testid="synthetic-scope-note">Synthetic demo data only. Deterministic rules are authoritative.</p>
-    <nav><a href="/">Dashboard</a><a href="/cases">Cases</a><a href="/review" data-testid="review-packet-link">Review packet</a><a href="/ai-review" data-testid="ai-review-link">AI review</a><a href="/review.json">Review JSON</a></nav>
     {badge("Track 3 demo", "good")}{badge("Fireworks optional", "warn")}{badge("No production validation", "warn")}
   </header>
   <main>
@@ -210,7 +264,7 @@ def render_cases() -> str:
       <article class="panel" data-testid="case-{html.escape(case["caseId"])}">
         <h2>{html.escape(case["caseTitle"])}</h2>
         <p>{html.escape(case["scenarioSummary"])}</p>
-        {badge(case["reviewStatus"], "warn")}{badge(case["finalDisposition"], "danger" if case["finalDisposition"] == "BLOCKED" else "warn")}
+        {status_badges(case_packet(case)["result"])}
         <p>Blockers: {len(case["blockers"])}. Unresolved pallets: {len(case["unresolvedPalletIds"])}.</p>
         <div class="toolbar">
           <a class="button" href="/cases/{html.escape(case["caseId"])}">Open case</a>
@@ -242,9 +296,9 @@ def render_cases() -> str:
     )
     body = f"""
   <header data-testid="cases-page">
+    {global_nav()}
     <h1>Synthetic Case Workspace</h1>
     <p>Synthetic demo data only. No operational action is authorized.</p>
-    <nav><a href="/">Dashboard</a><a href="/cases">Cases</a><a href="/review">Baseline review</a></nav>
   </header>
   <main>
     <section class="grid" aria-label="Synthetic cases">{cards}</section>
@@ -260,10 +314,11 @@ def render_case_detail(case_id: str) -> str:
     result = packet["result"]
     body = f"""
   <header data-testid="case-detail">
+    {global_nav()}
     <h1>{html.escape(case["caseTitle"])}</h1>
     <p>{html.escape(case["scenarioSummary"])}</p>
     <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/review">Reviewer workspace</a><a href="/cases/{html.escape(case_id)}/trace.json">Trace JSON</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a><a href="/cases/{html.escape(case_id)}/audit.md">Audit packet</a><a href="/ai-review?caseId={html.escape(case_id)}">AI Review</a><a href="/ai-review.json?caseId={html.escape(case_id)}">AI JSON</a></nav>
-    {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("No autonomous action", "warn")}
+    {status_badges(result)}
   </header>
   <main>
     <section class="grid">
@@ -312,7 +367,7 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     disclaimers = items(packet["limitations"], "case-safety")
     timeline = timeline_items(packet["evidenceTimeline"])
     trace = trace_table(packet["ruleTrace"])
-    telemetry = telemetry_table(packet["telemetryTimeline"])
+    telemetry = telemetry_table(packet["telemetryTimeline"], case["thresholdMaxC"])
     excursion_html = (
         f'<p data-testid="case-excursion">{fmt_time(excursion["startUtc"])} to {fmt_time(excursion["endUtc"])}. Duration: {excursion["durationMinutes"]} minutes. Zone: {html.escape(excursion["zoneId"])}.</p>'
         if excursion
@@ -433,14 +488,21 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     export_panel = (
         f'<section class="panel" data-testid="export-panel"><h2>Export packet</h2>'
         "<p>Markdown and JSON exports contain synthetic review evidence only.</p>"
-        f'<div class="toolbar"><a class="button" href="{trace_href}">Trace JSON</a><a class="button" href="{evidence_href}">Evidence JSON</a><a class="button" href="{export_href}">Export markdown</a><a class="button" href="{audit_href}">Audit packet</a></div></section>'
+        f'<div class="toolbar"><a class="button" href="{trace_href}">Trace JSON</a><a class="button" href="{evidence_href}">Evidence JSON</a><a class="button" href="{export_href}">Export markdown</a><a class="button" href="{audit_href}">Audit packet</a>'
+        + (
+            f'<a class="button" href="/cases/{html.escape(case_id)}/audit.md?simulateResolved=true">Simulated audit packet</a>'
+            if case_id == "blocked-unresolved-pallet" and not simulate_resolved
+            else ""
+        )
+        + "</div></section>"
     )
     body = f"""
   <header data-testid="case-review">
+    {global_nav()}
     <h1>{html.escape(case["caseTitle"])}</h1>
     <p>{html.escape(case["scenarioSummary"])}</p>
     <nav><a href="/cases">Cases</a><a href="{trace_href}">Trace JSON</a><a href="{evidence_href}">Evidence JSON</a><a href="{export_href}">Export packet</a><a href="{audit_href}">Audit packet</a><a href="{ai_href}">AI Review Assistant</a><a href="{ai_json_href}">AI JSON</a></nav>
-    {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("Autonomous actions: false", "warn")}
+    {status_badges(result)}
   </header>
   <main>
     {sim_note}
@@ -452,9 +514,9 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     </section>
     <section class="panel" data-testid="manual-resolution-panel"><h2>Manual resolution simulation</h2><p>Current unresolved pallet: {html.escape(", ".join(before_packet["result"]["unresolvedPalletIds"]) or "None")}</p><div class="toolbar">{simulation_link}</div></section>
     <section class="panel" data-testid="case-excursion-panel"><h2>Excursion</h2>{excursion_html}</section>
-    <section class="panel" data-testid="synthetic-telemetry-timeline"><h2>Synthetic temperature timeline</h2>{telemetry}</section>
+    <section class="panel" data-testid="synthetic-telemetry-timeline"><h2>Synthetic temperature timeline</h2><p>Threshold: {case["thresholdMaxC"]} C. Above-threshold readings are labeled as review signals.</p>{excursion_html}{telemetry}</section>
     <section class="panel" data-testid="evidence-timeline"><h2>Evidence timeline</h2><ul>{timeline}</ul></section>
-    <section class="panel" data-testid="rule-trace-panel"><h2>Deterministic Rule Trace</h2>{trace}</section>
+    <section class="panel" data-testid="rule-trace-panel"><h2>Deterministic Rule Trace</h2><p>Rule trace is deterministic and does not depend on Fireworks.</p>{trace}</section>
     <section class="grid">
       <article class="panel"><h2>Mapped pallet table</h2>{mapped_table}</article>
       <article class="panel status-block"><h2>Unresolved pallet table</h2>{unresolved_table}</article>
@@ -477,9 +539,9 @@ def render_review_packet(case: dict[str, Any] | None = None) -> str:
     excursion = result["excursion"]
     body = f"""
   <header data-testid="review-packet-page">
+    {global_nav()}
     <h1>Human Review Packet</h1>
     <p data-testid="packet-synthetic-label">Synthetic demo data only. This is not a validated pharmaceutical, medical, or compliance product.</p>
-    <nav><a href="/">Dashboard</a><a href="/review.json">Review JSON</a></nav>
     {badge("Final disposition blocked", "danger")}{badge("Human review required", "warn")}{badge("Fireworks optional", "warn")}
   </header>
   <main>
@@ -530,6 +592,7 @@ def render_ai_review(case: dict[str, Any] | None = None, case_id: str | None = N
     case_identity = f'<p data-testid="ai-selected-case">Selected case: {html.escape(packet.get("caseId", "baseline"))} - {html.escape(packet.get("caseTitle", "Baseline review packet"))}</p>'
     body = f"""
   <header data-testid="ai-review-page">
+    {global_nav()}
     <h1>AI Review Assistant</h1>
     <p data-testid="ai-scope-note">AI-assisted explanation only. Deterministic rules remain authoritative.</p>
     {case_identity}
@@ -604,8 +667,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         self.respond_markdown(audit_markdown(get_case(selected), simulate_resolved))
                         return
                 except KeyError:
-                    self.send_response(404)
-                    self.end_headers()
+                    self.respond_text(render_not_found(parts[1]), 404)
                     return
         if path == "/review":
             self.respond_text(render_review_packet())
@@ -614,8 +676,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             try:
                 self.respond_text(render_ai_review(case_id=case_id))
             except KeyError:
-                self.send_response(404)
-                self.end_headers()
+                self.respond_text(render_not_found(case_id), 404)
             return
         if path == "/api/baseline":
             self.respond_json(evaluate_case(load_fixture()))
@@ -627,19 +688,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
             try:
                 packet = case_packet(get_case(case_id)) if case_id else build_review_packet(load_fixture())
             except KeyError:
-                self.send_response(404)
-                self.end_headers()
+                self.respond_text(render_not_found(case_id), 404)
                 return
             self.respond_json(build_ai_review(packet))
             return
         if path == "/health":
             self.respond_json({"ok": True, "providers": "disabled"})
             return
-        self.send_response(404)
-        self.end_headers()
+        self.respond_text(render_not_found(), 404)
 
-    def respond_text(self, content: str) -> None:
-        self.send_response(200)
+    def respond_text(self, content: str, status: int = 200) -> None:
+        self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
         self.wfile.write(content.encode("utf-8"))

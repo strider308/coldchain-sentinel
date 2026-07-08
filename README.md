@@ -125,6 +125,7 @@ http://127.0.0.1:18080/
 - `/cases/blocked-unresolved-pallet/evidence.json` - case evidence timeline JSON.
 - `/cases/blocked-unresolved-pallet/export.md` - markdown export packet.
 - `/cases/blocked-unresolved-pallet/audit.md` - audit-style markdown packet; local browser notes are not included.
+- `/cases/blocked-unresolved-pallet/audit.md?simulateResolved=true` - simulated audit packet for local review packet completion.
 - `/review` - human review packet page.
 - `/review.json` - deterministic review packet JSON.
 - `/ai-review` - optional Fireworks-assisted reviewer brief with structured, sanitized, or deterministic fallback output.
@@ -132,6 +133,14 @@ http://127.0.0.1:18080/
 - `/health` - provider-disabled health status.
 
 `/ai-review` and `/ai-review.json` accept an optional `caseId` query parameter for the synthetic cases, for example `/ai-review?caseId=excursion-fully-mapped`.
+
+## Current Beta Capabilities
+
+- Synthetic telemetry timeline with threshold labels.
+- Deterministic rule trace that does not depend on Fireworks.
+- Reviewer workspace with local-only checklist and notes.
+- Evidence, trace, review packet, and audit packet exports.
+- Safe unknown-case page listing available synthetic case IDs.
 
 ## Deterministic Rule Trace
 
@@ -144,6 +153,10 @@ Trace items include `ruleId`, rule name, status, input summary, output summary, 
 The reviewer workspace stores checklist state and synthetic reviewer notes in browser `localStorage` only, keyed by case and simulation state. Notes are not uploaded and are not included in server-generated JSON or markdown except for a placeholder explaining that local notes stay in the browser.
 
 The packet completeness meter uses demo-only labels: `DEMO_PACKET_INCOMPLETE`, `DEMO_PACKET_REVIEWING`, and `DEMO_PACKET_READY_FOR_HUMAN_REVIEW_ARCHIVE`. These labels are not regulatory, compliance, or operational statuses.
+
+## Fireworks Role
+
+Fireworks is optional and non-authoritative. Its output is structured, sanitized, or rejected behind safety gates; deterministic case facts, rule traces, dispositions, pallet mappings, and `autonomousActionsAllowed` are not changed by AI output.
 
 ## Review Packet Instructions
 
@@ -160,6 +173,14 @@ Run the deterministic validation suite:
 
 ```powershell
 python tests/test_coldchain_validation.py
+```
+
+Run app self-checks:
+
+```powershell
+python src/coldchain_baseline.py
+python src/ai_review_assistant.py
+python src/serve_dashboard.py --check
 ```
 
 Run JSON validation from the repo root:
