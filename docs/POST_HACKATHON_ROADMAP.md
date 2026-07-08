@@ -5,6 +5,7 @@
 - Real dataset ingestion after license/TOS review.
 - Schema adapters.
 - Stronger model evaluation.
+- Sequence: adapter plan, license/TOS and privacy review, schema mapping, isolated benchmark, model-card update, then pilot calibration.
 
 ## Phase 2
 

@@ -262,6 +262,11 @@ def command_center_payload() -> dict[str, Any]:
             "sersModelCard": "/sers-model-card",
             "benchmarkExplainability": "/benchmark-explainability",
         },
+        "publicDatasetReadinessSummary": {
+            "externalDatasetsIngested": False,
+            "publicBenchmarkPlanAvailable": True,
+            "licenseTosReviewRequired": True,
+        },
         "deterministicReviewSummary": {
             "shipmentId": result["shipmentId"],
             "finalDisposition": result["finalDisposition"],
@@ -291,6 +296,9 @@ def command_center_payload() -> dict[str, Any]:
             "modelBenchmark": "/model-benchmark",
             "sersModelCard": "/sers-model-card",
             "benchmarkExplainability": "/benchmark-explainability",
+            "datasetAdapters": "/dataset-adapters",
+            "datasetLicenseChecklist": "/dataset-license-checklist",
+            "publicDatasetBenchmarkPlan": "/public-dataset-benchmark-plan",
             "reviewWorkspace": "/cases/blocked-unresolved-pallet/review",
             "ruleTrace": "/cases/blocked-unresolved-pallet/trace.json",
             "auditPacket": "/cases/blocked-unresolved-pallet/audit.md",
@@ -461,6 +469,7 @@ def render_command_center() -> str:
     sers = payload["sersSummary"]
     benchmark = payload["benchmarkSummary"]
     governance = payload["modelGovernanceSummary"]
+    dataset_readiness = payload["publicDatasetReadinessSummary"]
     review = payload["deterministicReviewSummary"]
     fireworks = payload["fireworksSafetySummary"]
     readiness = payload["readinessSummary"]
@@ -482,6 +491,7 @@ def render_command_center() -> str:
       <article class="panel" data-testid="command-sers-summary"><h2>SERS advisory risk summary</h2><p class="metric">{sers["riskScore"]}</p><p>Risk band: {html.escape(sers["riskBand"])}. Prediction horizon: {sers["predictionHorizonMinutes"]} minutes.</p><ul>{factors}</ul><p>Advisory only; predictions do not alter deterministic review facts.</p><div class="toolbar"><a class="button" href="/cases/blocked-unresolved-pallet/prediction.json">Prediction JSON</a></div></article>
       <article class="panel" data-testid="command-benchmark-summary"><h2>Model benchmark summary</h2><p>{html.escape(benchmark["benchmarkScope"])}</p><p>Training rows: {benchmark["trainingRows"]}. Test rows: {benchmark["testRows"]}. Accuracy: {benchmark["metrics"]["accuracy"]}. Compared baselines: {html.escape(", ".join(benchmark["baselines"]))}.</p><p>Benchmarked on deterministic synthetic data against simple baselines.</p><div class="toolbar"><a class="button" href="/model-benchmark">Benchmark</a><a class="button" href="/model-benchmark.json">Benchmark JSON</a></div></article>
       <article class="panel" data-testid="command-model-governance"><h2>Model governance</h2><p>SERS Model Card and Benchmark Explainability are available for the synthetic advisory model.</p><p>SERS advisory only: true. Deterministic rules authoritative: true.</p><div class="toolbar"><a class="button" href="{html.escape(governance["sersModelCard"])}">SERS Model Card</a><a class="button" href="{html.escape(governance["benchmarkExplainability"])}">Benchmark Explainability</a></div></article>
+      <article class="panel" data-testid="command-public-dataset-readiness"><h2>Public Dataset Readiness</h2><p>External datasets ingested: {str(dataset_readiness["externalDatasetsIngested"]).lower()}. Public benchmark plan available: {str(dataset_readiness["publicBenchmarkPlanAvailable"]).lower()}.</p><p>License/TOS review is required before any ingestion.</p><div class="toolbar"><a class="button" href="/dataset-adapters">Dataset Adapters</a><a class="button" href="/dataset-license-checklist">License Checklist</a><a class="button" href="/public-dataset-benchmark-plan">Benchmark Plan</a></div></article>
       <article class="panel status-block" data-testid="command-review-summary"><h2>Deterministic review packet summary</h2><p>Shipment ID: {html.escape(review["shipmentId"])}. finalDisposition: {html.escape(review["finalDisposition"])}. reviewStatus: {html.escape(review["reviewStatus"])}.</p><p>Unresolved pallet IDs: {html.escape(", ".join(review["unresolvedPalletIds"]) or "None")}. autonomousActionsAllowed: {str(review["autonomousActionsAllowed"]).lower()}.</p><ul>{blockers}</ul><div class="toolbar"><a class="button" href="/cases/blocked-unresolved-pallet/review">Review</a><a class="button" href="/cases/blocked-unresolved-pallet/trace.json">Trace JSON</a><a class="button" href="/cases/blocked-unresolved-pallet/audit.md">Audit packet</a></div></article>
       <article class="panel" data-testid="command-fireworks-summary"><h2>Fireworks safety-gate summary</h2><p>Fireworks configured: {str(fireworks["fireworksConfigured"]).lower()}. Fireworks authoritative: false.</p><p>Model output is validated, sanitized, or rejected. Deterministic fallback remains authoritative.</p><div class="toolbar"><a class="button" href="/ai-review">AI Review</a><a class="button" href="/ai-review.json">AI JSON</a></div></article>
       <article class="panel status-block" data-testid="command-readiness-summary"><h2>Readiness and safety summary</h2><p>No real data: {str(not readiness["realDataUsed"]).lower()}. No autonomous operational actions: {str(not readiness["autonomousActionsAllowed"]).lower()}. Not production/compliance validated: {str(not readiness["productionValidated"]).lower()}.</p><p>Synthetic hackathon/investor beta. Deterministic rules remain authoritative.</p><div class="toolbar"><a class="button" href="/beta-readiness">Beta Readiness</a><a class="button" href="/system-status.json">System Status</a><a class="button" href="/public-data-readiness">Public Data Readiness</a></div></article>
@@ -776,6 +786,11 @@ def render_roadmap() -> str:
             ["TimescaleDB evaluation", "Time-series persistence evaluation", "planned"],
             ["MLflow/Evidently evaluation", "Experiment and drift reporting evaluation", "planned"],
             ["Public data calibration", "Real dataset benchmark branch after license/TOS/provenance review", "planned"],
+            ["Adapter plan", "Define candidate adapters without ingesting external data", "documented"],
+            ["License/TOS review", "Confirm source rights, attribution, privacy, and provenance", "required"],
+            ["Schema mapping", "Map reviewed fields into Data Contract v2", "planned"],
+            ["Isolated benchmark sandbox", "Run cleaning and benchmark evaluation away from production claims", "planned"],
+            ["Model card update", "Record public benchmark evidence and limitations", "planned"],
             ["Model monitoring", "Drift, calibration, and model-card updates after real-world evaluation", "planned"],
             ["Pilot calibration", "No production validation until real-world evaluation is complete", "future"],
             ["Pilot readiness", "Customer-specific pilots after legal/compliance review", "future"],
@@ -1103,21 +1118,110 @@ def render_model_benchmark() -> str:
 
 
 def render_public_data_readiness() -> str:
-    rows = [
-        ["Public cold-chain/vaccine temperature datasets", "External benchmark enrichment", "not verified", "pending", "not ingested", "License, schema, and provenance not confirmed."],
-        ["Public IoT sensor anomaly datasets", "Noise/anomaly benchmarking", "not verified", "partial", "not ingested", "Domain fit and TOS not confirmed."],
-        ["Public time-series sensor datasets", "Model robustness experiments", "not verified", "unknown", "not ingested", "Schema and provenance not confirmed."],
-        ["public-apis style directories", "Discovery only", "directory only", "not a dataset", "not ingested", "Discovery tools are not data sources."],
-    ]
+    rows = [[item["category"], item["possibleUse"], ", ".join(item["statuses"]), item["reasonNotIngested"]] for item in dataset_adapters_json()["adapterCandidates"]]
     body = f"""
   <header data-testid="public-data-readiness-page">
     {global_nav()}
     <h1>Public Data Readiness</h1>
-    <p>No external datasets are ingested in this beta. Candidate sources remain gated until license, schema, and provenance are verified.</p>
+    <p>No public dataset is currently ingested. The synthetic benchmark remains the only active benchmark; public data validation is planned, not claimed.</p>
   </header>
-  <main><section class="panel">{table(["Candidate source", "Possible use", "License/TOS", "Schema compatibility", "Ingestion status", "Reason"], rows, "public-data-readiness-table")}</section></main>
+  <main><section class="panel">{table(["Candidate category", "Possible use", "Readiness statuses", "Reason not ingested"], rows, "public-data-readiness-table")}<div class="toolbar"><a class="button" href="/dataset-adapters">Dataset Adapters</a><a class="button" href="/dataset-license-checklist">License Checklist</a><a class="button" href="/public-dataset-benchmark-plan">Benchmark Plan</a></div></section></main>
 """
     return page("ColdChain Sentinel Public Data Readiness", body)
+
+
+def dataset_adapters_json() -> dict[str, Any]:
+    categories = [
+        ("cold-chain/vaccine temperature datasets", "Excursion and calibration benchmarking"),
+        ("IoT sensor anomaly datasets", "Cleaning and anomaly-rule evaluation"),
+        ("environmental time-series datasets", "Time-series robustness evaluation"),
+        ("warehouse/logistics telemetry datasets", "Schema and zone-mapping evaluation"),
+        ("public API discovery directories", "Source discovery only; directories are not datasets"),
+    ]
+    return {
+        "currentMode": "synthetic_only",
+        "externalDatasetsIngested": False,
+        "adapterCandidates": [
+            {
+                "category": category,
+                "possibleUse": use,
+                "requiredSchemaMapping": "Data Contract v2 normalized reading fields",
+                "licenseTosStatus": "LICENSE_REVIEW_REQUIRED",
+                "provenanceRequirements": "Source, version, collection method, and lineage must be documented.",
+                "privacyRiskReview": "PRIVACY_RISK_REVIEW_REQUIRED",
+                "ingestionStatus": "INGESTION_DEFERRED",
+                "reasonNotIngested": "License/TOS, schema, provenance, and privacy review are incomplete.",
+                "statuses": [
+                    "SYNTHETIC_ONLY_CURRENTLY",
+                    "LICENSE_REVIEW_REQUIRED",
+                    "SCHEMA_MAPPING_REQUIRED",
+                    "PROVENANCE_REVIEW_REQUIRED",
+                    "PRIVACY_RISK_REVIEW_REQUIRED",
+                    "INGESTION_DEFERRED",
+                    "EXPERIMENTAL_ADAPTER_PLANNED",
+                ],
+            }
+            for category, use in categories
+        ],
+        "requiredReviewSteps": [item["item"] for item in dataset_license_checklist_json()["checklist"]],
+        "schemaMappingTargets": [
+            "timestampUtc", "sensorId", "shipmentId", "zoneId", "temperatureC",
+            "humidityPercent", "batteryPercent", "signalStrength", "readingSequence",
+        ],
+        "claimsBoundary": "No public dataset validation is claimed; deterministic synthetic benchmarks remain the only active benchmarks.",
+        "safetyDisclaimers": ["No external datasets ingested.", "SERS remains advisory only.", "Deterministic rules remain authoritative."],
+    }
+
+
+def dataset_license_checklist_json() -> dict[str, Any]:
+    items_list = [
+        "source URL recorded", "license identified", "TOS checked", "commercial use checked",
+        "redistribution rights checked", "attribution requirements checked", "data provenance documented",
+        "privacy/PII risk reviewed", "schema mapped", "data quality profiled",
+        "benchmark isolated from production claims", "claims boundary documented",
+    ]
+    return {"currentMode": "synthetic_only", "checklist": [{"item": item, "status": "required"} for item in items_list], "externalDatasetsIngested": False}
+
+
+def public_dataset_benchmark_plan_json() -> dict[str, Any]:
+    return {
+        "currentMode": "synthetic_only",
+        "externalDatasetsIngested": False,
+        "steps": [
+            "import reviewed dataset into isolated benchmark sandbox",
+            "map fields to ColdChain normalized schema",
+            "run cleaning pipeline",
+            "generate quality report",
+            "run SERS benchmark",
+            "compare against simple baselines",
+            "report metrics and failure modes",
+            "update model card",
+            "avoid production claims until real pilot validation",
+        ],
+        "claimsBoundary": "Future public benchmarks will remain isolated from production claims.",
+        "sersAdvisoryOnly": True,
+        "deterministicRulesAuthoritative": True,
+    }
+
+
+def render_dataset_adapters() -> str:
+    payload = dataset_adapters_json()
+    rows = [[item["category"], item["possibleUse"], item["licenseTosStatus"], item["ingestionStatus"], item["reasonNotIngested"]] for item in payload["adapterCandidates"]]
+    body = f"""<header>{global_nav()}<h1>Public Dataset Adapters</h1><p>Synthetic data is the only active dataset. These adapter categories are plans, not ingested integrations.</p></header><main><section class="panel">{table(["Category", "Possible use", "License/TOS", "Ingestion", "Reason deferred"], rows, "dataset-adapters-table")}<div class="toolbar"><a class="button" href="/dataset-adapters.json">Adapter JSON</a><a class="button" href="/dataset-license-checklist">License Checklist</a></div></section></main>"""
+    return page("ColdChain Sentinel Public Dataset Adapters", body)
+
+
+def render_dataset_license_checklist() -> str:
+    payload = dataset_license_checklist_json()
+    rows = [[item["item"], item["status"]] for item in payload["checklist"]]
+    body = f"""<header>{global_nav()}<h1>Dataset License Checklist</h1><p>Every item is required before external dataset ingestion.</p></header><main><section class="panel">{table(["Review item", "Status"], rows, "dataset-license-checklist")}<a class="button" href="/dataset-license-checklist.json">Checklist JSON</a></section></main>"""
+    return page("ColdChain Sentinel Dataset License Checklist", body)
+
+
+def render_public_dataset_benchmark_plan() -> str:
+    payload = public_dataset_benchmark_plan_json()
+    body = f"""<header>{global_nav()}<h1>Public Dataset Benchmark Plan</h1><p>Public data validation is planned, not claimed. No external dataset is currently ingested.</p></header><main><section class="panel"><ol>{items(payload["steps"], "benchmark-plan-step")}</ol><p>{html.escape(payload["claimsBoundary"])}</p><a class="button" href="/public-dataset-benchmark-plan.json">Plan JSON</a></section></main>"""
+    return page("ColdChain Sentinel Public Dataset Benchmark Plan", body)
 
 
 def render_case_detail(case_id: str) -> str:
@@ -1535,6 +1639,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/public-data-readiness":
             self.respond_text(render_public_data_readiness())
+            return
+        if path == "/dataset-adapters":
+            self.respond_text(render_dataset_adapters())
+            return
+        if path == "/dataset-adapters.json":
+            self.respond_json(dataset_adapters_json())
+            return
+        if path == "/dataset-license-checklist":
+            self.respond_text(render_dataset_license_checklist())
+            return
+        if path == "/dataset-license-checklist.json":
+            self.respond_json(dataset_license_checklist_json())
+            return
+        if path == "/public-dataset-benchmark-plan":
+            self.respond_text(render_public_dataset_benchmark_plan())
+            return
+        if path == "/public-dataset-benchmark-plan.json":
+            self.respond_json(public_dataset_benchmark_plan_json())
             return
         if path == "/cases":
             self.respond_text(render_cases())

@@ -229,6 +229,12 @@ def test_routes(case: dict[str, Any]) -> None:
         explainability_status, explainability = fetch(base_url, "/benchmark-explainability")
         explainability_json_status, explainability_json = fetch(base_url, "/benchmark-explainability.json")
         public_data_status, public_data_page = fetch(base_url, "/public-data-readiness")
+        dataset_adapters_status, dataset_adapters = fetch(base_url, "/dataset-adapters")
+        dataset_adapters_json_status, dataset_adapters_json = fetch(base_url, "/dataset-adapters.json")
+        license_status, license_page = fetch(base_url, "/dataset-license-checklist")
+        license_json_status, license_json = fetch(base_url, "/dataset-license-checklist.json")
+        benchmark_plan_status, benchmark_plan = fetch(base_url, "/public-dataset-benchmark-plan")
+        benchmark_plan_json_status, benchmark_plan_json = fetch(base_url, "/public-dataset-benchmark-plan.json")
         roadmap_status, roadmap_page = fetch(base_url, "/roadmap")
         baseline_case_status, baseline_case = fetch(base_url, "/cases/blocked-unresolved-pallet")
         baseline_case_review_status, baseline_case_review = fetch(base_url, "/cases/blocked-unresolved-pallet/review")
@@ -291,6 +297,12 @@ def test_routes(case: dict[str, Any]) -> None:
     assert explainability_status == 200
     assert explainability_json_status == 200
     assert public_data_status == 200
+    assert dataset_adapters_status == 200
+    assert dataset_adapters_json_status == 200
+    assert license_status == 200
+    assert license_json_status == 200
+    assert benchmark_plan_status == 200
+    assert benchmark_plan_json_status == 200
     assert roadmap_status == 200
     assert baseline_case_status == 200
     assert baseline_case_review_status == 200
@@ -324,6 +336,8 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "/benchmark-explainability" in command_center
     assert "Deterministic review packet summary" in command_center
     assert "Fireworks safety-gate summary" in command_center
+    assert "Public Dataset Readiness" in command_center
+    assert "External datasets ingested: false" in command_center
     assert "Sensor Adapter status" in command_center
     assert "/sensor-adapters" in command_center
     assert "/data-contract" in command_center
@@ -359,11 +373,17 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Prohibited use" in model_card
     assert "On deterministic synthetic benchmark data, SERS is compared against simple baselines." in explainability
     assert "Known failure modes and limitations" in explainability
-    assert "No external datasets are ingested" in public_data_page
-    assert "not ingested" in public_data_page
+    assert "No public dataset is currently ingested" in public_data_page
+    assert "/dataset-adapters" in public_data_page
+    assert "/dataset-license-checklist" in public_data_page
+    assert "/public-dataset-benchmark-plan" in public_data_page
+    assert "Synthetic data is the only active dataset" in dataset_adapters
+    assert "Every item is required" in license_page
+    assert "Public data validation is planned, not claimed" in benchmark_plan
     assert "Platform Roadmap" in roadmap_page
     assert "FastAPI/Pydantic migration" in roadmap_page
     assert "Planned items are not production claims" in roadmap_page
+    assert "Isolated benchmark sandbox" in roadmap_page
     assert 'data-testid="global-nav"' in dashboard
     assert '<a href="/command-center">Command Center</a>' in dashboard
     assert 'data-testid="global-nav"' in cases_page
@@ -461,6 +481,9 @@ def test_routes(case: dict[str, Any]) -> None:
     adapter_examples = [json.loads(body) for _, body in adapter_example_statuses]
     pipeline_payload = json.loads(data_pipeline_json)
     benchmark_payload = json.loads(model_benchmark_json)
+    dataset_adapters_payload = json.loads(dataset_adapters_json)
+    license_payload = json.loads(license_json)
+    benchmark_plan_payload = json.loads(benchmark_plan_json)
     model_card_payload = json.loads(model_card_json)
     explainability_payload = json.loads(explainability_json)
     system_status = json.loads(system_status_json)
@@ -508,6 +531,12 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "rollingAverageThreshold" in benchmark_payload["baselines"]
     assert "accuracy" in benchmark_payload["metrics"]
     assert "confusionMatrix" in benchmark_payload["metrics"]
+    assert dataset_adapters_payload["externalDatasetsIngested"] is False
+    assert dataset_adapters_payload["currentMode"] == "synthetic_only"
+    assert all(item["ingestionStatus"] == "INGESTION_DEFERRED" for item in dataset_adapters_payload["adapterCandidates"])
+    assert all(item["status"] == "required" for item in license_payload["checklist"])
+    assert benchmark_plan_payload["externalDatasetsIngested"] is False
+    assert benchmark_plan_payload["sersAdvisoryOnly"] is True
     assert model_card_payload["advisoryOnly"] is True
     assert model_card_payload["deterministicRulesAuthoritative"] is True
     assert model_card_payload["autonomousActionsAllowed"] is False

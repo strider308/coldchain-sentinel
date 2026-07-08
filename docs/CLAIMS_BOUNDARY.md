@@ -18,3 +18,5 @@ ColdChain Sentinel is a synthetic hackathon/investor beta.
 - Superiority over competitors.
 - Autonomous release, quarantine, discard, reroute, or customer notification.
 - AMD success.
+
+Public dataset validation is not claimed. No external dataset is currently ingested, and future benchmark work remains isolated from production claims.

@@ -141,6 +141,12 @@ http://127.0.0.1:18080/
 - `/benchmark-explainability` - synthetic benchmark metrics, comparisons, and failure modes.
 - `/benchmark-explainability.json` - machine-readable benchmark explainability.
 - `/public-data-readiness` - public dataset readiness gate; no datasets are ingested yet.
+- `/dataset-adapters` - planned public dataset adapter categories and review gates.
+- `/dataset-adapters.json` - machine-readable dataset adapter readiness.
+- `/dataset-license-checklist` - required license, TOS, provenance, and privacy checks.
+- `/dataset-license-checklist.json` - machine-readable required checklist.
+- `/public-dataset-benchmark-plan` - isolated future public benchmark sequence.
+- `/public-dataset-benchmark-plan.json` - machine-readable benchmark plan.
 - `/cases/blocked-unresolved-pallet` - case detail page.
 - `/cases/blocked-unresolved-pallet/review` - reviewer workspace.
 - `/cases/blocked-unresolved-pallet/sensor-summary.json` - deterministic synthetic sensor aggregation summary.
@@ -168,6 +174,10 @@ http://127.0.0.1:18080/
 ## Model Governance
 
 SERS is advisory only. `/sers-model-card` documents its intended and prohibited uses, while `/benchmark-explainability` reports measured deterministic synthetic benchmark results against simple baselines. Neither SERS nor Fireworks can change deterministic review facts.
+
+## Public Dataset Readiness
+
+No external dataset is fetched or ingested. `/dataset-adapters`, `/dataset-license-checklist`, and `/public-dataset-benchmark-plan` document the review and isolated evaluation sequence required before future public data use.
 
 ## Recommended Demo Flow
 
@@ -403,6 +413,9 @@ Phase 4:
 - `docs/SERS_MODEL_CARD.md`
 - `docs/MODEL_BENCHMARKING.md`
 - `docs/BENCHMARK_EXPLAINABILITY.md`
+- `docs/PUBLIC_DATASET_ADAPTERS.md`
+- `docs/DATASET_LICENSE_CHECKLIST.md`
+- `docs/PUBLIC_DATASET_BENCHMARK_PLAN.md`
 - `docs/AI_SAFETY_GATE.md`
 - `docs/CLAIMS_BOUNDARY.md`
 - `docs/POST_HACKATHON_ROADMAP.md`

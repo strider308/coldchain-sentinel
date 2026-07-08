@@ -17,3 +17,5 @@ Rows are generated in memory from synthetic sensor windows. Features include rol
 Benchmark wording is limited to deterministic synthetic benchmark data against simple baselines. No real-world superiority, production readiness, or compliance validation is claimed.
 
 See `docs/BENCHMARK_EXPLAINABILITY.md` and `/benchmark-explainability` for metric definitions and known failure modes.
+
+Future public dataset evaluation must follow `docs/PUBLIC_DATASET_BENCHMARK_PLAN.md`; the active benchmark remains deterministic and synthetic.
