@@ -69,10 +69,13 @@ def provider_status(
 def deterministic_brief(packet: dict[str, Any]) -> dict[str, Any]:
     result = packet["result"]
     unresolved = ", ".join(result["unresolvedPalletIds"])
+    missing = packet.get("unresolvedEvidence") or []
+    if not missing:
+        missing = [f"Missing zone mapping for {unresolved}."] if unresolved else ["No missing synthetic pallet mapping listed."]
     return {
-        "summary": "Synthetic cold-chain excursion review remains blocked pending human review.",
+        "summary": str(packet.get("summary") or "Synthetic cold-chain review remains pending human review."),
         "whyBlocked": packet["blockingReasons"],
-        "missingEvidence": [f"Missing zone mapping for {unresolved}."],
+        "missingEvidence": missing,
         "reviewerChecklist": packet["reviewerChecklist"],
         "rootCauseHypotheses": [
             "Zone mapping was not supplied for one pallet.",

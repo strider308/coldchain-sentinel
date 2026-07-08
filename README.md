@@ -6,6 +6,8 @@ A synthetic, containerized cold-chain demo that detects a deterministic temperat
 
 ColdChain Sentinel loads a synthetic shipment fixture, applies deterministic cold-chain rules, shows a dashboard for the incident, and generates a human review packet. The baseline case includes a 45-minute high-temperature excursion, three mapped pallets, one unresolved pallet, and a blocked final disposition.
 
+The beta app also includes a small static synthetic case workspace for reviewing multiple demo scenarios without uploads, databases, or real operational data.
+
 ## Why It Matters
 
 Cold-chain teams need a clear bridge from raw telemetry to review-ready evidence. This demo shows that consequential logistics decisions should expose missing evidence instead of hiding it behind an automated answer.
@@ -44,6 +46,12 @@ The demo is product/workflow oriented: it focuses on auditability, a clear marke
 - Unresolved pallet: `PAL-SYN-1004` because zone mapping is missing.
 - Final disposition: `BLOCKED`.
 - Human review: required.
+
+## Synthetic Scenarios
+
+- `blocked-unresolved-pallet` - temperature excursion with missing zone mapping for `PAL-SYN-1004`; blocked and human-review required.
+- `excursion-fully-mapped` - temperature excursion with all pallets mapped; still human-review required and no autonomous action allowed.
+- `no-excursion-control` - synthetic control with no excursion and no unresolved mapping; not a real-world release approval.
 
 ## Local Run Instructions
 
@@ -108,11 +116,18 @@ http://127.0.0.1:18080/
 ## Routes
 
 - `/` - deterministic dashboard.
+- `/cases` - synthetic case workspace.
+- `/cases/blocked-unresolved-pallet` - case detail page.
+- `/cases/blocked-unresolved-pallet/review` - reviewer workspace.
+- `/cases/blocked-unresolved-pallet/evidence.json` - case evidence timeline JSON.
+- `/cases/blocked-unresolved-pallet/export.md` - markdown export packet.
 - `/review` - human review packet page.
 - `/review.json` - deterministic review packet JSON.
 - `/ai-review` - optional Fireworks-assisted reviewer brief with structured, sanitized, or deterministic fallback output.
 - `/ai-review.json` - AI review assistant JSON with unchanged deterministic result.
 - `/health` - provider-disabled health status.
+
+`/ai-review` and `/ai-review.json` accept an optional `caseId` query parameter for the synthetic cases, for example `/ai-review?caseId=excursion-fully-mapped`.
 
 ## Review Packet Instructions
 
@@ -196,6 +211,14 @@ No AMD or Fireworks credentials are required for the deterministic container dem
 - Deterministic rules remain authoritative when provider output is structured, sanitized, rejected, or unavailable.
 - Any future provider use requires a provider addendum covering credentials, access, runtime/model behavior, cost/rate limits, logging, privacy, failure modes, fallback behavior, and demo-safe wording.
 - Providers must remain optional and non-authoritative; deterministic rules remain the source of truth.
+
+## Intentionally Not Included
+
+- Real customer, patient, pharmaceutical, logistics, shipment, or sensor data.
+- Authentication, database persistence, uploads, analytics, or background jobs.
+- Operational approval, release, quarantine, discard, reroute, or customer-notification controls.
+- AMD integration or AMD success claims.
+- Production readiness, medical validation, pharmaceutical validation, or compliance certification.
 
 ## Submission Checklist
 

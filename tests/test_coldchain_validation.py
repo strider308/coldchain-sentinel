@@ -16,6 +16,7 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
 import ai_review_assistant  # noqa: E402
+from case_engine import case_packet, get_case, load_cases  # noqa: E402
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture  # noqa: E402
 from serve_dashboard import DashboardHandler, render_ai_review, render_dashboard, render_review_packet  # noqa: E402
 
@@ -130,6 +131,11 @@ def test_routes(case: dict[str, Any]) -> None:
         review_json_status, review_json = fetch(base_url, "/review.json")
         ai_review_status, ai_review = fetch(base_url, "/ai-review")
         ai_review_json_status, ai_review_json = fetch(base_url, "/ai-review.json")
+        cases_status, cases_page = fetch(base_url, "/cases")
+        baseline_case_status, baseline_case = fetch(base_url, "/cases/blocked-unresolved-pallet")
+        baseline_case_review_status, baseline_case_review = fetch(base_url, "/cases/blocked-unresolved-pallet/review")
+        baseline_evidence_status, baseline_evidence = fetch(base_url, "/cases/blocked-unresolved-pallet/evidence.json")
+        baseline_export_status, baseline_export = fetch(base_url, "/cases/blocked-unresolved-pallet/export.md")
         health_status, health_json = fetch(base_url, "/health")
     finally:
         server.shutdown()
@@ -141,6 +147,11 @@ def test_routes(case: dict[str, Any]) -> None:
     assert review_json_status == 200
     assert ai_review_status == 200
     assert ai_review_json_status == 200
+    assert cases_status == 200
+    assert baseline_case_status == 200
+    assert baseline_case_review_status == 200
+    assert baseline_evidence_status == 200
+    assert baseline_export_status == 200
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
     assert "Final disposition blocked." in review
@@ -148,6 +159,13 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Structured output verified: no" in ai_review
     assert "Displayed brief source: deterministic_fallback" in ai_review
     assert "AI-assisted explanation only." in ai_review
+    assert "Synthetic Case Workspace" in cases_page
+    assert "Blocked excursion with unresolved pallet" in baseline_case
+    assert "Reviewer checklist" in baseline_case_review
+    assert "2026-06-26 10:30 UTC" in baseline_case_review
+    assert "2026-06-26 11:15 UTC" in baseline_case_review
+    assert "Duration: 45 minutes" in baseline_case_review
+    assert "Synthetic demo data only." in baseline_export
 
     packet = json.loads(review_json)
     assert packet == build_review_packet(case)
@@ -167,6 +185,68 @@ def test_routes(case: dict[str, Any]) -> None:
 
     health = json.loads(health_json)
     assert health == {"ok": True, "providers": "disabled"}
+
+    evidence = json.loads(baseline_evidence)
+    assert evidence["caseId"] == "blocked-unresolved-pallet"
+    assert evidence["result"]["finalDisposition"] == "BLOCKED"
+    assert evidence["result"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+
+
+def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), DashboardHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        for synthetic_case in load_cases():
+            case_id = synthetic_case["caseId"]
+            detail_status, _ = fetch(base_url, f"/cases/{case_id}")
+            review_status, review_page = fetch(base_url, f"/cases/{case_id}/review")
+            evidence_status, evidence_json = fetch(base_url, f"/cases/{case_id}/evidence.json")
+            export_status, export_md = fetch(base_url, f"/cases/{case_id}/export.md")
+            ai_status, _ = fetch(base_url, f"/ai-review?caseId={case_id}")
+            ai_json_status, ai_json = fetch(base_url, f"/ai-review.json?caseId={case_id}")
+
+            assert detail_status == 200
+            assert review_status == 200
+            assert evidence_status == 200
+            assert export_status == 200
+            assert ai_status == 200
+            assert ai_json_status == 200
+            assert "Reviewer checklist" in review_page
+            assert "No autonomous operational action." in review_page
+            assert "Fireworks may provide an optional non-authoritative reviewer explanation only." in export_md
+            assert "No autonomous operational action." in export_md
+
+            evidence = json.loads(evidence_json)
+            assert evidence["result"]["autonomousActionsAllowed"] is False
+            ai_packet = json.loads(ai_json)
+            assert ai_packet["deterministicResult"]["autonomousActionsAllowed"] is False
+            assert ai_packet["deterministicResult"] == case_packet(get_case(case_id))["result"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    baseline = case_packet(get_case("blocked-unresolved-pallet"))["result"]
+    assert baseline["finalDisposition"] == "BLOCKED"
+    assert baseline["reviewStatus"] == "HUMAN_REVIEW_REQUIRED"
+    assert baseline["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+
+    fully_mapped = case_packet(get_case("excursion-fully-mapped"))["result"]
+    assert fully_mapped["unresolvedPalletIds"] == []
+    assert fully_mapped["autonomousActionsAllowed"] is False
+
+    control = case_packet(get_case("no-excursion-control"))["result"]
+    assert control["excursion"] is None
+    assert control["autonomousActionsAllowed"] is False
+    assert "RELEASE" not in control["finalDisposition"]
+
+    simulated = case_packet(get_case("blocked-unresolved-pallet"), simulate_resolved=True)["result"]
+    assert simulated["unresolvedPalletIds"] == []
+    assert simulated["reviewStatus"] == "MAPPING_REVIEW_SIMULATED"
+    assert simulated["finalDisposition"] == "REVIEW_PACKET_COMPLETE"
+    assert simulated["autonomousActionsAllowed"] is False
 
 
 class FakeResponse:
@@ -439,6 +519,7 @@ def main() -> None:
         test_review_packet(case)
         test_rendered_pages(case)
         test_routes(case)
+        test_case_routes_and_invariants(case)
         test_fireworks_missing_key_fallback(case)
         test_fireworks_http_error_fallback(case)
         test_fireworks_unstructured_text_sanitized(case)

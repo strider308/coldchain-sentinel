@@ -7,8 +7,10 @@ import html
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from ai_review_assistant import build_ai_review
+from case_engine import case_packet, evidence_json, export_markdown, get_case, load_cases
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture
 
 HOST = "127.0.0.1"
@@ -26,6 +28,13 @@ def badge(text: str, tone: str = "neutral") -> str:
 def items(values: list[str], test_prefix: str) -> str:
     return "\n".join(
         f'<li data-testid="{html.escape(test_prefix)}-{html.escape(value)}">{html.escape(value)}</li>' for value in values
+    )
+
+
+def timeline_items(values: list[dict[str, str]]) -> str:
+    return "\n".join(
+        f'<li data-testid="timeline-{html.escape(row["time"])}"><strong>{html.escape(row["time"])}</strong> - {html.escape(row["event"])}</li>'
+        for row in values
     )
 
 
@@ -101,7 +110,7 @@ def render_dashboard(case: dict[str, Any] | None = None) -> str:
   <header data-testid="demo-overview">
     <h1>ColdChain Sentinel</h1>
     <p data-testid="synthetic-scope-note">Synthetic demo data only. Deterministic rules are authoritative.</p>
-    <nav><a href="/">Dashboard</a><a href="/review" data-testid="review-packet-link">Review packet</a><a href="/ai-review" data-testid="ai-review-link">AI review</a><a href="/review.json">Review JSON</a></nav>
+    <nav><a href="/">Dashboard</a><a href="/cases">Cases</a><a href="/review" data-testid="review-packet-link">Review packet</a><a href="/ai-review" data-testid="ai-review-link">AI review</a><a href="/review.json">Review JSON</a></nav>
     {badge("Track 3 demo", "good")}{badge("Fireworks optional", "warn")}{badge("No production validation", "warn")}
   </header>
   <main>
@@ -146,6 +155,103 @@ def render_dashboard(case: dict[str, Any] | None = None) -> str:
     return page("ColdChain Sentinel", body)
 
 
+def render_cases() -> str:
+    cards = "\n".join(
+        f"""
+      <article class="panel" data-testid="case-{html.escape(case["caseId"])}">
+        <h2>{html.escape(case["caseTitle"])}</h2>
+        <p>{html.escape(case["scenarioSummary"])}</p>
+        {badge(case["reviewStatus"], "warn")}{badge(case["finalDisposition"], "danger" if case["finalDisposition"] == "BLOCKED" else "warn")}
+        <p><a class="button" href="/cases/{html.escape(case["caseId"])}">Open case</a></p>
+      </article>
+"""
+        for case in load_cases()
+    )
+    body = f"""
+  <header data-testid="cases-page">
+    <h1>Synthetic Case Workspace</h1>
+    <p>Synthetic demo data only. No operational action is authorized.</p>
+    <nav><a href="/">Dashboard</a><a href="/cases">Cases</a><a href="/review">Baseline review</a></nav>
+  </header>
+  <main><section class="grid" aria-label="Synthetic cases">{cards}</section></main>
+"""
+    return page("ColdChain Sentinel Cases", body)
+
+
+def render_case_detail(case_id: str) -> str:
+    case = get_case(case_id)
+    packet = case_packet(case)
+    result = packet["result"]
+    body = f"""
+  <header data-testid="case-detail">
+    <h1>{html.escape(case["caseTitle"])}</h1>
+    <p>{html.escape(case["scenarioSummary"])}</p>
+    <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/review">Reviewer workspace</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a></nav>
+    {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("No autonomous action", "warn")}
+  </header>
+  <main>
+    <section class="grid">
+      <article class="panel"><h2>Shipment</h2><p class="metric">{html.escape(result["shipmentId"])}</p></article>
+      <article class="panel"><h2>Review status</h2><p>{html.escape(result["reviewStatus"])}</p></article>
+      <article class="panel"><h2>Final disposition</h2><p>{html.escape(result["finalDisposition"])}</p></article>
+      <article class="panel status-block"><h2>Autonomous actions allowed</h2><p>{str(result["autonomousActionsAllowed"]).lower()}</p></article>
+    </section>
+  </main>
+"""
+    return page(case["caseTitle"], body)
+
+
+def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
+    case = get_case(case_id)
+    packet = case_packet(case, simulate_resolved)
+    result = packet["result"]
+    excursion = result["excursion"]
+    mapped = items(result["mappedPalletIds"], "case-mapped")
+    unresolved = items(result["unresolvedPalletIds"] or ["None"], "case-unresolved")
+    blockers = items(result["blockers"] or ["None"], "case-blocker")
+    checklist = items(packet["reviewerChecklist"], "case-check")
+    disclaimers = items(packet["limitations"], "case-safety")
+    timeline = timeline_items(packet["evidenceTimeline"])
+    excursion_html = (
+        f'<p data-testid="case-excursion">{fmt_time(excursion["startUtc"])} to {fmt_time(excursion["endUtc"])}. Duration: {excursion["durationMinutes"]} minutes. Zone: {html.escape(excursion["zoneId"])}.</p>'
+        if excursion
+        else '<p data-testid="case-excursion">No temperature excursion in this synthetic control fixture.</p>'
+    )
+    sim_note = (
+        '<p data-testid="simulated-resolution">Synthetic mapping resolution simulated for PAL-SYN-1004. No operational action is authorized.</p>'
+        if simulate_resolved
+        else ""
+    )
+    ai_href = f"/ai-review?caseId={html.escape(case_id)}"
+    body = f"""
+  <header data-testid="case-review">
+    <h1>{html.escape(case["caseTitle"])}</h1>
+    <p>{html.escape(case["scenarioSummary"])}</p>
+    <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a><a href="{ai_href}">AI Review Assistant</a></nav>
+    {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("Autonomous actions: false", "warn")}
+  </header>
+  <main>
+    {sim_note}
+    <section class="grid">
+      <article class="panel"><h2>Shipment ID</h2><p class="metric">{html.escape(result["shipmentId"])}</p></article>
+      <article class="panel"><h2>Review status</h2><p>{html.escape(result["reviewStatus"])}</p></article>
+      <article class="panel"><h2>Final disposition</h2><p>{html.escape(result["finalDisposition"])}</p></article>
+      <article class="panel status-block"><h2>Autonomous action status</h2><p>{str(result["autonomousActionsAllowed"]).lower()}</p></article>
+    </section>
+    <section class="panel" data-testid="case-excursion-panel"><h2>Excursion</h2>{excursion_html}</section>
+    <section class="panel" data-testid="evidence-timeline"><h2>Evidence timeline</h2><ul>{timeline}</ul></section>
+    <section class="grid">
+      <article class="panel"><h2>Mapped pallets</h2><ul>{mapped}</ul></article>
+      <article class="panel status-block"><h2>Unresolved pallets</h2><ul>{unresolved}</ul></article>
+      <article class="panel status-block"><h2>Blockers</h2><ul>{blockers}</ul></article>
+      <article class="panel"><h2>Reviewer checklist</h2><ul>{checklist}</ul></article>
+      <article class="panel status-block"><h2>Safety disclaimers</h2><ul>{disclaimers}</ul></article>
+    </section>
+  </main>
+"""
+    return page(f"{case['caseTitle']} Review", body)
+
+
 def render_review_packet(case: dict[str, Any] | None = None) -> str:
     packet = build_review_packet(case or load_fixture())
     result = packet["result"]
@@ -185,8 +291,8 @@ def render_review_packet(case: dict[str, Any] | None = None) -> str:
     return page("ColdChain Sentinel Review Packet", body)
 
 
-def render_ai_review(case: dict[str, Any] | None = None) -> str:
-    packet = build_review_packet(case or load_fixture())
+def render_ai_review(case: dict[str, Any] | None = None, case_id: str | None = None) -> str:
+    packet = case_packet(get_case(case_id)) if case_id else build_review_packet(case or load_fixture())
     ai_review = build_ai_review(packet)
     result = ai_review["deterministicResult"]
     provider = ai_review["assistant"]["provider"]
@@ -221,7 +327,7 @@ def render_ai_review(case: dict[str, Any] | None = None) -> str:
 
     <section class="grid" aria-label="Deterministic facts">
       <article class="panel" data-testid="ai-shipment-id"><h2>Shipment</h2><p class="metric">{html.escape(result["shipmentId"])}</p></article>
-      <article class="panel" data-testid="ai-duration"><h2>Excursion duration</h2><p class="metric">{result["excursion"]["durationMinutes"]} minutes</p></article>
+      <article class="panel" data-testid="ai-duration"><h2>Excursion duration</h2><p class="metric">{result["excursion"]["durationMinutes"] if result["excursion"] else "None"}{ " minutes" if result["excursion"] else ""}</p></article>
       <article class="panel status-block" data-testid="ai-final-disposition"><h2>Final disposition</h2><p class="metric">{html.escape(result["finalDisposition"])}</p></article>
       <article class="panel status-block" data-testid="ai-review-status"><h2>Review status</h2><p>{html.escape(result["reviewStatus"])}</p></article>
       <article class="panel status-block" data-testid="ai-unresolved-pallet"><h2>Unresolved pallet</h2><p>{html.escape(", ".join(result["unresolvedPalletIds"]))}</p></article>
@@ -242,25 +348,64 @@ def render_ai_review(case: dict[str, Any] | None = None) -> str:
 
 class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
-        if self.path in ("/", "/index.html"):
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
+        case_id = query.get("caseId", [None])[0]
+        simulate_resolved = query.get("simulateResolved", ["false"])[0].lower() == "true"
+        if path in ("/", "/index.html"):
             self.respond_text(render_dashboard())
             return
-        if self.path == "/review":
+        if path == "/cases":
+            self.respond_text(render_cases())
+            return
+        if path.startswith("/cases/"):
+            parts = [part for part in path.split("/") if part]
+            if len(parts) >= 2:
+                try:
+                    selected = parts[1]
+                    if len(parts) == 2:
+                        self.respond_text(render_case_detail(selected))
+                        return
+                    if parts[2] == "review":
+                        self.respond_text(render_case_review(selected, simulate_resolved))
+                        return
+                    if parts[2] == "evidence.json":
+                        self.respond_json(evidence_json(get_case(selected), simulate_resolved))
+                        return
+                    if parts[2] == "export.md":
+                        self.respond_markdown(export_markdown(get_case(selected), simulate_resolved))
+                        return
+                except KeyError:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+        if path == "/review":
             self.respond_text(render_review_packet())
             return
-        if self.path == "/ai-review":
-            self.respond_text(render_ai_review())
+        if path == "/ai-review":
+            try:
+                self.respond_text(render_ai_review(case_id=case_id))
+            except KeyError:
+                self.send_response(404)
+                self.end_headers()
             return
-        if self.path == "/api/baseline":
+        if path == "/api/baseline":
             self.respond_json(evaluate_case(load_fixture()))
             return
-        if self.path == "/review.json":
+        if path == "/review.json":
             self.respond_json(build_review_packet(load_fixture()))
             return
-        if self.path == "/ai-review.json":
-            self.respond_json(build_ai_review(build_review_packet(load_fixture())))
+        if path == "/ai-review.json":
+            try:
+                packet = case_packet(get_case(case_id)) if case_id else build_review_packet(load_fixture())
+            except KeyError:
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.respond_json(build_ai_review(packet))
             return
-        if self.path == "/health":
+        if path == "/health":
             self.respond_json({"ok": True, "providers": "disabled"})
             return
         self.send_response(404)
@@ -277,6 +422,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.end_headers()
         self.wfile.write(json.dumps(content, sort_keys=True).encode("utf-8"))
+
+    def respond_markdown(self, content: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/markdown; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(content.encode("utf-8"))
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - stdlib signature
         return

@@ -1,0 +1,91 @@
+{
+  "cases": [
+    {
+      "caseId": "blocked-unresolved-pallet",
+      "caseTitle": "Blocked excursion with unresolved pallet",
+      "shipmentId": "SYN-SHIP-2026-06-26-A",
+      "scenarioSummary": "Synthetic temperature excursion with one pallet missing zone mapping.",
+      "excursion": {
+        "startUtc": "2026-06-26T10:30:00Z",
+        "endUtc": "2026-06-26T11:15:00Z",
+        "durationMinutes": 45,
+        "thresholdMaxC": 8.0,
+        "zoneId": "Z1",
+        "evidenceIds": ["E-CC-001", "E-CC-002"]
+      },
+      "mappedPalletIds": ["PAL-SYN-1001", "PAL-SYN-1002", "PAL-SYN-1003"],
+      "unresolvedPalletIds": ["PAL-SYN-1004"],
+      "blockers": ["TEMPERATURE_EXCURSION_DETECTED", "UNRESOLVED_PALLET_MAPPING", "HUMAN_REVIEW_REQUIRED"],
+      "finalDisposition": "BLOCKED",
+      "reviewStatus": "HUMAN_REVIEW_REQUIRED",
+      "autonomousActionsAllowed": false,
+      "reviewerChecklist": [
+        "Confirm the synthetic excursion window and duration.",
+        "Inspect mapped pallets PAL-SYN-1001, PAL-SYN-1002, and PAL-SYN-1003.",
+        "Resolve missing zone mapping for PAL-SYN-1004.",
+        "Confirm no operational disposition is taken from this demo packet."
+      ],
+      "safetyDisclaimers": [
+        "Synthetic demo data only.",
+        "Deterministic rules are authoritative.",
+        "Human review required.",
+        "No autonomous operational action."
+      ]
+    },
+    {
+      "caseId": "excursion-fully-mapped",
+      "caseTitle": "Excursion with all pallets mapped",
+      "shipmentId": "SYN-SHIP-2026-06-27-B",
+      "scenarioSummary": "Synthetic temperature excursion where all affected pallets are mapped, but human review is still required.",
+      "excursion": {
+        "startUtc": "2026-06-27T08:20:00Z",
+        "endUtc": "2026-06-27T08:55:00Z",
+        "durationMinutes": 35,
+        "thresholdMaxC": 8.0,
+        "zoneId": "Z2",
+        "evidenceIds": ["E-CC-101", "E-CC-102"]
+      },
+      "mappedPalletIds": ["PAL-SYN-2001", "PAL-SYN-2002", "PAL-SYN-2003"],
+      "unresolvedPalletIds": [],
+      "blockers": ["TEMPERATURE_EXCURSION_DETECTED", "HUMAN_REVIEW_REQUIRED"],
+      "finalDisposition": "BLOCKED",
+      "reviewStatus": "HUMAN_REVIEW_REQUIRED",
+      "autonomousActionsAllowed": false,
+      "reviewerChecklist": [
+        "Confirm the synthetic excursion window and affected zone.",
+        "Inspect mapped pallets PAL-SYN-2001, PAL-SYN-2002, and PAL-SYN-2003.",
+        "Confirm no operational disposition is taken from this demo packet."
+      ],
+      "safetyDisclaimers": [
+        "Synthetic demo data only.",
+        "All pallets are mapped, but this is not a release approval.",
+        "Deterministic rules are authoritative.",
+        "No autonomous operational action."
+      ]
+    },
+    {
+      "caseId": "no-excursion-control",
+      "caseTitle": "No-excursion synthetic control",
+      "shipmentId": "SYN-SHIP-2026-06-28-C",
+      "scenarioSummary": "Synthetic control case with no temperature excursion and no unresolved pallet mapping.",
+      "excursion": null,
+      "mappedPalletIds": ["PAL-SYN-3001", "PAL-SYN-3002"],
+      "unresolvedPalletIds": [],
+      "blockers": ["SYNTHETIC_CONTROL_REVIEW"],
+      "finalDisposition": "NO_EXCURSION_CONTROL",
+      "reviewStatus": "CONTROL_REVIEW_COMPLETE",
+      "autonomousActionsAllowed": false,
+      "reviewerChecklist": [
+        "Confirm this is a synthetic control case.",
+        "Confirm no excursion evidence is present in the fixture.",
+        "Confirm no operational disposition is taken from this demo packet."
+      ],
+      "safetyDisclaimers": [
+        "Synthetic control data only.",
+        "No real-world release approval is claimed.",
+        "Deterministic rules are authoritative.",
+        "No autonomous operational action."
+      ]
+    }
+  ]
+}
