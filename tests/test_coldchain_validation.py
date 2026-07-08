@@ -144,7 +144,9 @@ def test_routes(case: dict[str, Any]) -> None:
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
     assert "Final disposition blocked." in review
-    assert "Fireworks verified: no" in ai_review
+    assert "Fireworks call succeeded: no" in ai_review
+    assert "Structured output verified: no" in ai_review
+    assert "Displayed brief source: deterministic_fallback" in ai_review
     assert "AI-assisted explanation only." in ai_review
 
     packet = json.loads(review_json)
@@ -155,6 +157,9 @@ def test_routes(case: dict[str, Any]) -> None:
     ai_packet = json.loads(ai_review_json)
     assert ai_packet["deterministicResult"] == packet["result"]
     assert ai_packet["assistant"]["provider"]["fireworksVerified"] is False
+    assert ai_packet["assistant"]["provider"]["fireworksCallSucceeded"] is False
+    assert ai_packet["assistant"]["provider"]["fireworksStructuredOutputVerified"] is False
+    assert ai_packet["assistant"]["provider"]["displayedBriefSource"] == "deterministic_fallback"
     assert ai_packet["deterministicResult"]["finalDisposition"] == "BLOCKED"
     assert ai_packet["deterministicResult"]["reviewStatus"] == "HUMAN_REVIEW_REQUIRED"
     assert ai_packet["deterministicResult"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
@@ -195,6 +200,18 @@ def with_fake_fireworks(content: str) -> tuple[list[dict[str, Any]], Any]:
     return calls, original
 
 
+def with_fireworks_http_error() -> tuple[list[dict[str, Any]], Any]:
+    calls: list[dict[str, Any]] = []
+    original = urllib.request.urlopen
+
+    def fake_urlopen(request: urllib.request.Request, timeout: int) -> FakeResponse:
+        calls.append(json.loads(request.data.decode("utf-8")))  # type: ignore[union-attr]
+        raise urllib.error.HTTPError(request.full_url, 400, "Bad Request", {}, None)
+
+    urllib.request.urlopen = fake_urlopen  # type: ignore[assignment]
+    return calls, original
+
+
 def restore_fireworks(original_urlopen: Any, old_key: str | None) -> None:
     urllib.request.urlopen = original_urlopen  # type: ignore[assignment]
     if old_key is None:
@@ -213,13 +230,40 @@ def test_fireworks_missing_key_fallback(case: dict[str, Any]) -> None:
             os.environ["FIREWORKS_API_KEY"] = old_key
 
     assert review["assistant"]["provider"]["fireworksVerified"] is False
+    assert review["assistant"]["provider"]["fireworksCallSucceeded"] is False
+    assert review["assistant"]["provider"]["fireworksStructuredOutputVerified"] is False
+    assert review["assistant"]["provider"]["displayedBriefSource"] == "deterministic_fallback"
     assert review["assistant"]["provider"]["status"] == "Fireworks not configured"
     assert review["deterministicResult"]["finalDisposition"] == "BLOCKED"
 
 
-def test_fireworks_unstructured_fallback(case: dict[str, Any]) -> None:
+def test_fireworks_http_error_fallback(case: dict[str, Any]) -> None:
     packet = build_review_packet(case)
-    calls, original = with_fake_fireworks("not json")
+    calls, original = with_fireworks_http_error()
+    old_key = os.environ.get("FIREWORKS_API_KEY")
+    os.environ["FIREWORKS_API_KEY"] = "test-key"
+    try:
+        review = ai_review_assistant.build_ai_review(packet)
+    finally:
+        restore_fireworks(original, old_key)
+
+    assert len(calls) == 4
+    assert review["assistant"]["provider"]["fireworksCallSucceeded"] is False
+    assert review["assistant"]["provider"]["fireworksStructuredOutputVerified"] is False
+    assert review["assistant"]["provider"]["displayedBriefSource"] == "deterministic_fallback"
+    assert review["deterministicResult"]["finalDisposition"] == "BLOCKED"
+
+
+def test_fireworks_unstructured_text_sanitized(case: dict[str, Any]) -> None:
+    packet = build_review_packet(case)
+    text = """
+    The shipment remains blocked because a temperature excursion was detected and PAL-SYN-1004 has missing zone mapping.
+    Missing evidence: PAL-SYN-1004 zone mapping is not supplied.
+    Reviewer should confirm the synthetic excursion window and resolve the missing mapping.
+    Root cause hypothesis: mapping feed omitted one pallet.
+    Deterministic rules remain authoritative.
+    """
+    calls, original = with_fake_fireworks(text)
     old_key = os.environ.get("FIREWORKS_API_KEY")
     os.environ["FIREWORKS_API_KEY"] = "test-key"
     try:
@@ -230,8 +274,31 @@ def test_fireworks_unstructured_fallback(case: dict[str, Any]) -> None:
     assert calls[0]["response_format"]["type"] == "json_schema"
     assert calls[0]["reasoning_effort"] == "none"
     assert review["assistant"]["provider"]["fireworksVerified"] is False
-    assert "structured verification pending" in review["assistant"]["provider"]["status"]
+    assert review["assistant"]["provider"]["fireworksCallSucceeded"] is True
+    assert review["assistant"]["provider"]["fireworksStructuredOutputVerified"] is False
+    assert review["assistant"]["provider"]["displayedBriefSource"] == "sanitized_fireworks_text"
+    assert "PAL-SYN-1004" in " ".join(review["assistant"]["brief"]["missingEvidence"])
+    assert review["assistant"]["unstructuredAiResponse"] == ""
     assert review["deterministicResult"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+
+
+def test_fireworks_unsafe_text_rejected(case: dict[str, Any]) -> None:
+    packet = build_review_packet(case)
+    text = "The shipment can clear for use and is safe for distribution after review."
+    _, original = with_fake_fireworks(text)
+    old_key = os.environ.get("FIREWORKS_API_KEY")
+    os.environ["FIREWORKS_API_KEY"] = "test-key"
+    try:
+        review = ai_review_assistant.build_ai_review(packet)
+    finally:
+        restore_fireworks(original, old_key)
+
+    assert review["assistant"]["provider"]["fireworksCallSucceeded"] is True
+    assert review["assistant"]["provider"]["displayedBriefSource"] == "deterministic_fallback"
+    assert review["assistant"]["provider"]["status"] == (
+        "Fireworks call succeeded; output rejected by safety filter; deterministic fallback shown."
+    )
+    assert review["deterministicResult"]["autonomousActionsAllowed"] is False
 
 
 def test_fireworks_missing_required_json_key_fallback(case: dict[str, Any]) -> None:
@@ -252,7 +319,9 @@ def test_fireworks_missing_required_json_key_fallback(case: dict[str, Any]) -> N
         restore_fireworks(original, old_key)
 
     assert review["assistant"]["provider"]["fireworksVerified"] is False
-    assert "structured verification pending" in review["assistant"]["provider"]["status"]
+    assert review["assistant"]["provider"]["fireworksCallSucceeded"] is True
+    assert review["assistant"]["provider"]["fireworksStructuredOutputVerified"] is False
+    assert review["assistant"]["provider"]["displayedBriefSource"] == "deterministic_fallback"
     assert review["deterministicResult"]["finalDisposition"] == "BLOCKED"
 
 
@@ -280,6 +349,9 @@ def test_fireworks_structured_json_accepted_and_non_authoritative(case: dict[str
 
     assert calls[0]["response_format"]["type"] == "json_schema"
     assert review["assistant"]["provider"]["fireworksVerified"] is True
+    assert review["assistant"]["provider"]["fireworksCallSucceeded"] is True
+    assert review["assistant"]["provider"]["fireworksStructuredOutputVerified"] is True
+    assert review["assistant"]["provider"]["displayedBriefSource"] == "fireworks_structured_json"
     assert review["assistant"]["provider"]["structuredOutputMode"] == "json_schema"
     assert review["assistant"]["provider"]["reasoningEffortNoneAccepted"] is True
     assert "finalDisposition" not in review["assistant"]["brief"]
@@ -298,7 +370,9 @@ def main() -> None:
         test_rendered_pages(case)
         test_routes(case)
         test_fireworks_missing_key_fallback(case)
-        test_fireworks_unstructured_fallback(case)
+        test_fireworks_http_error_fallback(case)
+        test_fireworks_unstructured_text_sanitized(case)
+        test_fireworks_unsafe_text_rejected(case)
         test_fireworks_missing_required_json_key_fallback(case)
         test_fireworks_structured_json_accepted_and_non_authoritative(case)
         print("coldchain validation suite passed")

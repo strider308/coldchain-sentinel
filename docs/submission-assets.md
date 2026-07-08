@@ -1,6 +1,6 @@
 # ColdChain Sentinel Submission Asset Drafts
 
-Status: draft submission copy only. Public repo and Render deployment are live; slides, video, cover image, final form submission, and official deadline confirmation remain pending. AMD and Fireworks success are not claimed.
+Status: draft submission copy only. Public repo and Render deployment are live; slides, video, cover image, final form submission, and official deadline confirmation remain pending. AMD success is not claimed.
 
 Public GitHub repo URL: https://github.com/strider308/coldchain-sentinel
 Demo app URL/platform: https://coldchain-sentinel-35ex.onrender.com on Render
@@ -19,7 +19,7 @@ A synthetic, containerized cold-chain demo that detects a deterministic temperat
 
 ColdChain Sentinel is a Track 3 hackathon demo for cold-chain incident review. It uses synthetic shipment data and deterministic rules to identify a 45-minute high-temperature excursion from 2026-06-26 10:30 UTC to 11:15 UTC, map three exposed pallets, preserve `PAL-SYN-1004` as unresolved because zone mapping is missing, and block final disposition until human review.
 
-The baseline is containerized and deterministic. Fireworks is optional for an AI-assisted reviewer brief only; deterministic rules remain authoritative and Fireworks does not control final disposition. AMD remains pending and is not used or claimed. The demo does not use real shipment, customer, patient, or pharmaceutical data, and it is not a validated medical, pharmaceutical, logistics compliance, or production system.
+The baseline is containerized and deterministic. Fireworks is optional for an AI-assisted reasoning/explanation brief only; provider output is gated by deterministic validation and safety filters. If structured output is unavailable, the app uses sanitized text or deterministic fallback. Deterministic rules remain authoritative and Fireworks does not control final disposition. AMD remains pending and is not used or claimed. The demo does not use real shipment, customer, patient, or pharmaceutical data, and it is not a validated medical, pharmaceutical, logistics compliance, or production system.
 
 ## 4. Draft Tags
 
@@ -39,7 +39,7 @@ Create a clean hackathon cover image for "ColdChain Sentinel" showing a cold-cha
 6. Blocker: show `PAL-SYN-1004` unresolved because zone mapping is missing.
 7. Safety: final disposition blocked, human review required, and no autonomous release, quarantine, discard, reroute, or customer notification.
 8. Review packet: open the human-readable packet and `/review.json`.
-9. AI assistant: open `/ai-review` to show optional Fireworks reviewer explanation or deterministic fallback.
+9. AI assistant: open `/ai-review` to show optional Fireworks reviewer explanation as structured JSON, sanitized text, or deterministic fallback.
 10. Track 3 close: explain product potential, completeness, containerization, and optional provider addendum path.
 11. Boundary: no AMD success, production readiness, or real-world compliance validation claimed.
 
@@ -52,7 +52,7 @@ Create a clean hackathon cover image for "ColdChain Sentinel" showing a cold-cha
 5. Safety boundary: blocked final disposition and human review required.
 6. Product/moat: evidence-to-decision workflow, auditability, and no-provider fallback.
 7. Technical completeness: stdlib app, tests, Docker container, health route, security scans.
-8. Fireworks AI Review Assistant: optional, explanation-only, non-authoritative.
+8. Fireworks AI Review Assistant: optional, explanation-only, non-authoritative, gated by safety filters.
 9. Submission readiness: public repo, demo URL, video, slides, and cover image still pending.
 
 ## 8. Demo Walkthrough Checklist
@@ -68,7 +68,7 @@ Create a clean hackathon cover image for "ColdChain Sentinel" showing a cold-cha
 - [ ] Show safety boundary and prohibited autonomous actions.
 - [ ] Open `/review`.
 - [ ] Open `/review.json` if useful.
-- [ ] Open `/ai-review` and show Fireworks verified only if a real call succeeds; otherwise show fallback.
+- [ ] Open `/ai-review` and show structured Fireworks output, sanitized Fireworks text, or deterministic fallback.
 - [ ] End on blocked/manual-review state.
 
 ## 9. Container Evidence Checklist
@@ -111,10 +111,10 @@ Create a clean hackathon cover image for "ColdChain Sentinel" showing a cold-cha
 - [x] AMD credits not received; access pending.
 - [ ] AMD credentials/access verified by human action.
 - [ ] AMD runtime/model behavior verified with synthetic input only.
-- [ ] Fireworks credentials/API/model access verified by human action.
+- [ ] Fireworks credentials/API/model access verified with synthetic input only.
 - [ ] Fireworks cost, rate limit, logging, privacy, and failure modes reviewed.
 - [ ] Fallback behavior tested with providers disabled.
-- [ ] Provider output remains assistive and non-authoritative.
+- [ ] Provider output remains assistive, filtered, and non-authoritative.
 - [ ] Provider usage does not control final disposition.
 - [ ] README, app, slides, and video claims updated only after addendum evidence exists.
 - [x] Provider addendum readiness documented in projects/coldchain/docs/provider-addendums.md.

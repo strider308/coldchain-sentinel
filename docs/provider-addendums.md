@@ -9,13 +9,14 @@ Status: optional, non-authoritative assistant.
 - Credits received.
 - API key must come only from `FIREWORKS_API_KEY`.
 - Optional model override: `FIREWORKS_MODEL`.
-- Default model: `accounts/fireworks/models/deepseek-v3p1`.
-- Verification requires a real successful Fireworks API call.
-- No Fireworks success is claimed until a successful call is observed locally or on Render.
+- Default model: `accounts/fireworks/routers/kimi-k2p6-turbo`.
+- Structured verification requires a real successful Fireworks API call with valid structured JSON.
+- If structured output is unavailable, local deterministic sanitizer/extractor logic may show a bounded reviewer brief from provider text when it passes safety filters; otherwise deterministic fallback is shown.
 - Fireworks may summarize and explain the deterministic review packet.
 - Fireworks must not decide or alter `finalDisposition`, `reviewStatus`, `unresolvedPalletIds`, `autonomousActionsAllowed`, blocker logic, or source facts.
 - Fireworks output is shown only as AI-assisted explanation.
-- Missing key, timeout, rate limit, or invalid response must fall back to deterministic review.
+- Fireworks must not approve, reject, release, quarantine, discard, reroute, notify customers, certify compliance, or make a production-ready decision.
+- Missing key, timeout, rate limit, invalid response, low-quality text, or unsafe response must fall back to deterministic review.
 
 ## AMD
 

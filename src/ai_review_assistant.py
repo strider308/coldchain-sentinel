@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from typing import Any
@@ -25,30 +26,72 @@ BRIEF_SCHEMA = {
         "safetyNote": {"type": "string"},
     },
 }
+MAX_TEXT = 240
+MAX_ITEMS = 5
+UNSAFE_PHRASES = [
+    "release shipment",
+    "approve shipment",
+    "clear for use",
+    "safe for distribution",
+    "quarantine automatically",
+    "discard automatically",
+    "reroute automatically",
+    "notify customer automatically",
+    "validated pharmaceutical product",
+    "certified compliance",
+    "medical validation",
+    "production-ready decision",
+]
 
 
-def fallback_brief(packet: dict[str, Any], reason: str) -> dict[str, Any]:
+def provider_status(
+    configured: bool,
+    call_succeeded: bool,
+    structured_verified: bool,
+    model: str,
+    source: str,
+    status: str,
+) -> dict[str, Any]:
+    return {
+        "fireworksConfigured": configured,
+        "fireworksCallSucceeded": call_succeeded,
+        "fireworksStructuredOutputVerified": structured_verified,
+        "fireworksVerified": structured_verified,
+        "fireworksModel": model,
+        "displayedBriefSource": source,
+        "amdStatus": "pending/not configured",
+        "status": status,
+    }
+
+
+def deterministic_brief(packet: dict[str, Any]) -> dict[str, Any]:
     result = packet["result"]
     unresolved = ", ".join(result["unresolvedPalletIds"])
     return {
-        "provider": {
-            "fireworksConfigured": bool(os.environ.get("FIREWORKS_API_KEY")),
-            "fireworksVerified": False,
-            "fireworksModel": os.environ.get("FIREWORKS_MODEL") or DEFAULT_MODEL,
-            "amdStatus": "pending/not configured",
-            "status": reason,
-        },
-        "brief": {
-            "summary": "Synthetic cold-chain excursion review remains blocked pending human review.",
-            "whyBlocked": packet["blockingReasons"],
-            "missingEvidence": [f"Missing zone mapping for {unresolved}."],
-            "reviewerChecklist": packet["reviewerChecklist"],
-            "rootCauseHypotheses": [
-                "Zone mapping was not supplied for one pallet.",
-                "The temperature excursion requires reviewer inspection before any consequential action.",
-            ],
-            "safetyNote": "AI-assisted explanation only. Deterministic rules remain authoritative.",
-        },
+        "summary": "Synthetic cold-chain excursion review remains blocked pending human review.",
+        "whyBlocked": packet["blockingReasons"],
+        "missingEvidence": [f"Missing zone mapping for {unresolved}."],
+        "reviewerChecklist": packet["reviewerChecklist"],
+        "rootCauseHypotheses": [
+            "Zone mapping was not supplied for one pallet.",
+            "The temperature excursion requires reviewer inspection before any consequential action.",
+        ],
+        "safetyNote": "AI-assisted explanation only. Deterministic rules remain authoritative.",
+    }
+
+
+def fallback_brief(packet: dict[str, Any], reason: str, call_succeeded: bool = False) -> dict[str, Any]:
+    model = os.environ.get("FIREWORKS_MODEL") or DEFAULT_MODEL
+    return {
+        "provider": provider_status(
+            bool(os.environ.get("FIREWORKS_API_KEY")),
+            call_succeeded,
+            False,
+            model,
+            "deterministic_fallback",
+            reason,
+        ),
+        "brief": deterministic_brief(packet),
         "unstructuredAiResponse": "",
     }
 
@@ -72,7 +115,13 @@ def compact_packet(packet: dict[str, Any]) -> dict[str, Any]:
 def string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item) for item in value]
+    return [bounded_text(str(item)) for item in value[:MAX_ITEMS] if bounded_text(str(item))]
+
+
+def bounded_text(value: str, limit: int = MAX_TEXT) -> str:
+    value = re.sub(r"[*_`>#\[\]{}]", "", value)
+    value = re.sub(r"\s+", " ", value).strip(" -:\t\r\n")
+    return value[:limit].rstrip()
 
 
 def validate_brief(value: Any) -> dict[str, Any] | None:
@@ -80,14 +129,72 @@ def validate_brief(value: Any) -> dict[str, Any] | None:
         return None
     if not all(key in value for key in BRIEF_KEYS):
         return None
-    return {
-        "summary": str(value["summary"]),
+    brief = {
+        "summary": bounded_text(str(value["summary"])),
         "whyBlocked": string_list(value["whyBlocked"]),
         "missingEvidence": string_list(value["missingEvidence"]),
         "reviewerChecklist": string_list(value["reviewerChecklist"]),
         "rootCauseHypotheses": string_list(value["rootCauseHypotheses"]),
-        "safetyNote": str(value["safetyNote"]),
+        "safetyNote": bounded_text(str(value["safetyNote"])),
     }
+    if not brief["summary"] or not brief["safetyNote"]:
+        return None
+    if any(not brief[key] for key in ("whyBlocked", "missingEvidence", "reviewerChecklist", "rootCauseHypotheses")):
+        return None
+    return brief
+
+
+def unsafe_text(value: str) -> bool:
+    normalized = re.sub(r"\s+", " ", value.lower())
+    return any(phrase in normalized for phrase in UNSAFE_PHRASES)
+
+
+def candidate_lines(content: str) -> list[str]:
+    lines = []
+    for raw in content.splitlines():
+        line = bounded_text(re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", raw))
+        if 20 <= len(line) <= MAX_TEXT:
+            lines.append(line)
+    return lines[:24]
+
+
+def lines_with(lines: list[str], *needles: str) -> list[str]:
+    values = [line for line in lines if any(needle in line.lower() for needle in needles)]
+    seen: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.append(value)
+    return seen[:MAX_ITEMS]
+
+
+def sanitize_fireworks_text(packet: dict[str, Any], content: str) -> dict[str, Any] | None:
+    if unsafe_text(content):
+        return None
+    lines = candidate_lines(content)
+    joined = " ".join(lines).lower()
+    if "pal-syn-1004" not in joined and "temperature" not in joined and "human review" not in joined:
+        return None
+
+    fallback = deterministic_brief(packet)
+    summary = next(
+        (
+            line
+            for line in lines
+            if any(term in line.lower() for term in ("blocked", "human review", "temperature", "missing zone"))
+        ),
+        fallback["summary"],
+    )
+    brief = {
+        "summary": summary,
+        "whyBlocked": lines_with(lines, "blocked", "temperature", "missing zone", "pal-syn-1004")
+        or fallback["whyBlocked"],
+        "missingEvidence": lines_with(lines, "missing", "pal-syn-1004") or fallback["missingEvidence"],
+        "reviewerChecklist": lines_with(lines, "confirm", "inspect", "resolve", "review") or fallback["reviewerChecklist"],
+        "rootCauseHypotheses": lines_with(lines, "omitted", "not supplied", "missing mapping", "requires reviewer")
+        or fallback["rootCauseHypotheses"],
+        "safetyNote": "AI-assisted explanation only. Deterministic rules remain authoritative.",
+    }
+    return validate_brief(brief)
 
 
 def build_prompt(packet: dict[str, Any]) -> list[dict[str, str]]:
@@ -160,7 +267,7 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
     try:
         body, structured_mode, reasoning_accepted = request_structured_fireworks(api_key, payload)
     except urllib.error.HTTPError as exc:
-        return fallback_brief(packet, f"Fireworks called but structured verification pending: HTTP {exc.code} {exc.reason}")
+        return fallback_brief(packet, f"Fireworks unavailable: HTTP {exc.code} {exc.reason}")
     except (OSError, TimeoutError, urllib.error.URLError, json.JSONDecodeError) as exc:
         return fallback_brief(packet, f"Fireworks unavailable: {exc.__class__.__name__}")
 
@@ -168,21 +275,42 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
     try:
         brief = validate_brief(json.loads(content))
     except json.JSONDecodeError:
-        return fallback_brief(packet, "Fireworks called but structured verification pending: unstructured text")
+        brief = sanitize_fireworks_text(packet, content)
+        if brief is None:
+            status = "Fireworks call succeeded; output rejected by safety filter; deterministic fallback shown."
+            if not unsafe_text(content):
+                status = "Fireworks call succeeded; sanitizer could not extract a safe reviewer brief; deterministic fallback shown."
+            return fallback_brief(packet, status, call_succeeded=True)
+        return {
+            "provider": provider_status(
+                True,
+                True,
+                False,
+                model,
+                "sanitized_fireworks_text",
+                "Fireworks call succeeded; sanitized reviewer brief shown.",
+            ),
+            "brief": brief,
+            "unstructuredAiResponse": "",
+        }
 
     if brief is None:
-        return fallback_brief(packet, "Fireworks called but structured verification pending: invalid JSON")
+        return fallback_brief(
+            packet,
+            "Fireworks call succeeded; structured output missing required keys; deterministic fallback shown.",
+            call_succeeded=True,
+        )
 
     return {
-        "provider": {
-            "fireworksConfigured": True,
-            "fireworksVerified": True,
-            "fireworksModel": model,
-            "amdStatus": "pending/not configured",
-            "status": "Fireworks verified structured reviewer brief",
-            "structuredOutputMode": structured_mode,
-            "reasoningEffortNoneAccepted": reasoning_accepted,
-        },
+        "provider": provider_status(
+            True,
+            True,
+            True,
+            model,
+            "fireworks_structured_json",
+            "Fireworks verified structured reviewer brief.",
+        )
+        | {"structuredOutputMode": structured_mode, "reasoningEffortNoneAccepted": reasoning_accepted},
         "brief": brief,
         "unstructuredAiResponse": "",
     }
@@ -198,6 +326,7 @@ def build_ai_review(packet: dict[str, Any]) -> dict[str, Any]:
         "safety": [
             "AI-assisted explanation only.",
             "Deterministic rules remain authoritative.",
+            "No autonomous operational action.",
             "No autonomous release, quarantine, discard, reroute, or customer notification.",
             "Synthetic demo data only.",
             "Not a validated pharmaceutical, medical, logistics compliance, or medical product.",

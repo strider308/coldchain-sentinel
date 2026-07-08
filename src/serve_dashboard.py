@@ -196,10 +196,10 @@ def render_ai_review(case: dict[str, Any] | None = None) -> str:
     missing_items = items([str(value) for value in brief["missingEvidence"]], "ai-missing")
     root_cause_items = items([str(value) for value in brief["rootCauseHypotheses"]], "ai-root-cause")
     why_items = items([str(value) for value in brief["whyBlocked"]], "ai-why-blocked")
-    unstructured = ai_review["assistant"].get("unstructuredAiResponse") or ""
-    unstructured_html = (
-        f'<section class="panel status-block" data-testid="ai-unstructured"><h2>Unstructured AI response</h2><p>{html.escape(unstructured)}</p></section>'
-        if unstructured
+    source = provider["displayedBriefSource"]
+    source_label = (
+        "<p><strong>Sanitized Fireworks-generated reviewer brief, non-authoritative.</strong></p>"
+        if source == "sanitized_fireworks_text"
         else ""
     )
     body = f"""
@@ -208,12 +208,14 @@ def render_ai_review(case: dict[str, Any] | None = None) -> str:
     <p data-testid="ai-scope-note">AI-assisted explanation only. Deterministic rules remain authoritative.</p>
     <nav><a href="/">Dashboard</a><a href="/review">Review packet</a><a href="/ai-review.json">AI Review JSON</a></nav>
     {badge("Fireworks configured: " + ("yes" if provider["fireworksConfigured"] else "no"), "good" if provider["fireworksConfigured"] else "warn")}
-    {badge("Fireworks verified: " + ("yes" if provider["fireworksVerified"] else "no"), "good" if provider["fireworksVerified"] else "warn")}
+    {badge("Fireworks call succeeded: " + ("yes" if provider["fireworksCallSucceeded"] else "no"), "good" if provider["fireworksCallSucceeded"] else "warn")}
+    {badge("Structured output verified: " + ("yes" if provider["fireworksStructuredOutputVerified"] else "no"), "good" if provider["fireworksStructuredOutputVerified"] else "warn")}
+    {badge("Displayed brief source: " + source, "good" if source != "deterministic_fallback" else "warn")}
     {badge("AMD status: pending/not configured", "warn")}
   </header>
   <main>
     <section class="grid" aria-label="Provider status">
-      <article class="panel" data-testid="provider-status"><h2>Provider status</h2><p>{html.escape(provider["status"])}</p><p>Model: {html.escape(provider["fireworksModel"])}</p><p>AMD status: pending/not configured.</p></article>
+      <article class="panel" data-testid="provider-status"><h2>Provider status</h2><p>{html.escape(provider["status"])}</p><p>Model: {html.escape(provider["fireworksModel"])}</p><p>Displayed brief source: {html.escape(source)}</p><p>AMD status: pending/not configured.</p></article>
       <article class="panel status-block" data-testid="ai-safety-boundary"><h2>Safety boundary</h2><ul>{safety_items}</ul></article>
     </section>
 
@@ -227,14 +229,13 @@ def render_ai_review(case: dict[str, Any] | None = None) -> str:
     </section>
 
     <section class="grid" aria-label="AI reviewer brief">
-      <article class="panel" data-testid="ai-summary"><h2>Reviewer brief</h2><p>{html.escape(str(brief["summary"]))}</p></article>
+      <article class="panel" data-testid="ai-summary"><h2>Reviewer brief</h2>{source_label}<p>{html.escape(str(brief["summary"]))}</p></article>
       <article class="panel status-block" data-testid="ai-why-blocked"><h2>Why blocked</h2><ul>{why_items}</ul></article>
       <article class="panel status-block" data-testid="ai-missing-evidence"><h2>Missing evidence</h2><ul>{missing_items}</ul></article>
       <article class="panel" data-testid="ai-reviewer-checklist"><h2>Reviewer checklist</h2><ul>{checklist_items}</ul></article>
       <article class="panel" data-testid="ai-root-cause"><h2>Root-cause hypotheses</h2><ul>{root_cause_items}</ul></article>
       <article class="panel" data-testid="ai-safety-note"><h2>Safety note</h2><p>{html.escape(str(brief["safetyNote"]))}</p></article>
     </section>
-    {unstructured_html}
   </main>
 """
     return page("ColdChain Sentinel AI Review Assistant", body)

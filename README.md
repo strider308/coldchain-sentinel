@@ -20,10 +20,10 @@ The demo is product/workflow oriented: it focuses on auditability, a clear marke
 
 - Synthetic deterministic demo.
 - Provider-disabled deterministic baseline.
-- Optional Fireworks AI Review Assistant for non-authoritative reviewer explanations.
+- Optional Fireworks AI Review Assistant for non-authoritative reasoning/explanation.
 - Human review required.
 - Final disposition blocked.
-- AMD is not used or claimed. Fireworks is optional and never controls disposition.
+- AMD is not used or claimed. Fireworks is optional, gated by deterministic validation and safety filters, and never controls disposition.
 
 ## Safety Boundaries
 
@@ -110,7 +110,7 @@ http://127.0.0.1:18080/
 - `/` - deterministic dashboard.
 - `/review` - human review packet page.
 - `/review.json` - deterministic review packet JSON.
-- `/ai-review` - optional Fireworks-assisted reviewer brief with deterministic fallback.
+- `/ai-review` - optional Fireworks-assisted reviewer brief with structured, sanitized, or deterministic fallback output.
 - `/ai-review.json` - AI review assistant JSON with unchanged deterministic result.
 - `/health` - provider-disabled health status.
 
@@ -169,7 +169,7 @@ Batch 5 validated the provider-disabled container path with:
 - Docker healthcheck healthy status.
 - Docker Compose build/run health route check.
 
-No AMD or Fireworks credentials are required for the deterministic container demo. Set `FIREWORKS_API_KEY` only when intentionally verifying the optional AI Review Assistant; `FIREWORKS_MODEL` is optional and defaults to `accounts/fireworks/models/deepseek-v3p1`.
+No AMD or Fireworks credentials are required for the deterministic container demo. Set `FIREWORKS_API_KEY` only when intentionally verifying the optional AI Review Assistant; `FIREWORKS_MODEL` is optional and defaults to `accounts/fireworks/routers/kimi-k2p6-turbo`.
 
 ## Public Repo And Deployment Status
 
@@ -189,10 +189,11 @@ No AMD or Fireworks credentials are required for the deterministic container dem
 
 ## Provider Status
 
-- Fireworks: credits received; optional AI Review Assistant integration is non-authoritative and verified only after a successful real API call.
+- Fireworks: credits received; optional AI Review Assistant integration is non-authoritative. Structured output is verified when valid JSON matches the expected schema; otherwise the app shows sanitized provider text only when it passes local safety filters, or deterministic fallback.
 - AMD: credits not received.
 - No AMD success is claimed.
 - Fireworks does not decide or alter final disposition.
+- Deterministic rules remain authoritative when provider output is structured, sanitized, rejected, or unavailable.
 - Any future provider use requires a provider addendum covering credentials, access, runtime/model behavior, cost/rate limits, logging, privacy, failure modes, fallback behavior, and demo-safe wording.
 - Providers must remain optional and non-authoritative; deterministic rules remain the source of truth.
 
