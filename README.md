@@ -124,6 +124,7 @@ http://127.0.0.1:18080/
 - `/cases/blocked-unresolved-pallet/trace.json` - deterministic rule trace JSON.
 - `/cases/blocked-unresolved-pallet/evidence.json` - case evidence timeline JSON.
 - `/cases/blocked-unresolved-pallet/export.md` - markdown export packet.
+- `/cases/blocked-unresolved-pallet/audit.md` - audit-style markdown packet; local browser notes are not included.
 - `/review` - human review packet page.
 - `/review.json` - deterministic review packet JSON.
 - `/ai-review` - optional Fireworks-assisted reviewer brief with structured, sanitized, or deterministic fallback output.
@@ -138,6 +139,12 @@ Each synthetic case includes local synthetic temperature readings. The app deriv
 
 Trace items include `ruleId`, rule name, status, input summary, output summary, evidence IDs, and safety impact. Example rule IDs include `TEMP_THRESHOLD_CHECK`, `EXCURSION_WINDOW_CALCULATION`, `ZONE_IMPACT_IDENTIFICATION`, `PALLET_MAPPING_CHECK`, `HUMAN_REVIEW_GATE`, and `AUTONOMOUS_ACTION_DENY`.
 
+## Local Review Session
+
+The reviewer workspace stores checklist state and synthetic reviewer notes in browser `localStorage` only, keyed by case and simulation state. Notes are not uploaded and are not included in server-generated JSON or markdown except for a placeholder explaining that local notes stay in the browser.
+
+The packet completeness meter uses demo-only labels: `DEMO_PACKET_INCOMPLETE`, `DEMO_PACKET_REVIEWING`, and `DEMO_PACKET_READY_FOR_HUMAN_REVIEW_ARCHIVE`. These labels are not regulatory, compliance, or operational statuses.
+
 ## Review Packet Instructions
 
 1. Start the app locally or in Docker.
@@ -145,7 +152,7 @@ Trace items include `ruleId`, rule name, status, input summary, output summary, 
 3. Open `/review.json` for the deterministic machine-readable packet.
 4. Confirm the packet shows the blocked disposition, human review requirement, `PAL-SYN-1004` unresolved mapping, and prohibited autonomous actions.
 
-The review packet is generated from the synthetic fixture and deterministic rule output. It is not an approval, release decision, quarantine decision, discard decision, reroute decision, or customer notification.
+The review packet is generated from the synthetic fixture and deterministic rule output. It is not an operational decision, quarantine decision, discard decision, reroute decision, or customer notification.
 
 ## Test And Validation Commands
 

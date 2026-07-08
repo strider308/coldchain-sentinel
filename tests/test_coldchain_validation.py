@@ -140,8 +140,12 @@ def test_routes(case: dict[str, Any]) -> None:
         baseline_trace_status, baseline_trace = fetch(base_url, "/cases/blocked-unresolved-pallet/trace.json")
         baseline_evidence_status, baseline_evidence = fetch(base_url, "/cases/blocked-unresolved-pallet/evidence.json")
         baseline_export_status, baseline_export = fetch(base_url, "/cases/blocked-unresolved-pallet/export.md")
+        baseline_audit_status, baseline_audit = fetch(base_url, "/cases/blocked-unresolved-pallet/audit.md")
         simulated_export_status, simulated_export = fetch(
             base_url, "/cases/blocked-unresolved-pallet/export.md?simulateResolved=true"
+        )
+        simulated_audit_status, simulated_audit = fetch(
+            base_url, "/cases/blocked-unresolved-pallet/audit.md?simulateResolved=true"
         )
         health_status, health_json = fetch(base_url, "/health")
     finally:
@@ -161,7 +165,9 @@ def test_routes(case: dict[str, Any]) -> None:
     assert baseline_trace_status == 200
     assert baseline_evidence_status == 200
     assert baseline_export_status == 200
+    assert baseline_audit_status == 200
     assert simulated_export_status == 200
+    assert simulated_audit_status == 200
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
     assert "Final disposition blocked." in review
@@ -177,9 +183,15 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Reviewer checklist" in baseline_case_review
     assert "0/4 reviewed" in baseline_case_review
     assert "localStorage" in baseline_case_review
+    assert "Local demo notes only. Not uploaded, not persisted server-side." in baseline_case_review
+    assert "Packet completeness" in baseline_case_review
+    assert "DEMO_PACKET_INCOMPLETE" in baseline_case_review
+    assert "Review session summary" in baseline_case_review
+    assert "Clear local checklist and notes" in baseline_case_review
     assert "Simulate resolving missing mapping" in baseline_case_review
     assert "/ai-review?caseId=blocked-unresolved-pallet" in baseline_case_review
     assert "/ai-review.json?caseId=blocked-unresolved-pallet" in baseline_case_review
+    assert "/cases/blocked-unresolved-pallet/audit.md" in baseline_case_review
     assert "2026-06-26 10:30 UTC" in baseline_case_review
     assert "2026-06-26 11:15 UTC" in baseline_case_review
     assert "Duration: 45 minutes" in baseline_case_review
@@ -188,15 +200,22 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "REVIEW_PACKET_COMPLETE" in simulated_review
     assert "MAPPING_REVIEW_SIMULATED" in simulated_review
     assert "PAL-SYN-1004 is synthetically mapped" in simulated_review
-    assert "This is a synthetic review packet completion, not shipment approval." in simulated_review
+    assert "This is a synthetic review packet completion, not an operational decision." in simulated_review
     simulated_lower = simulated_review.lower()
     for forbidden in ("approved", "released", "safe for distribution", "compliant", "certified"):
         assert forbidden not in simulated_lower
     assert "Synthetic demo data only." in baseline_export
     assert "## Evidence Timeline" in baseline_export
     assert "## Safety Disclaimers" in baseline_export
+    assert "## Reviewer Local Notes" in baseline_audit
+    assert "Reviewer local notes: stored only in browser localStorage and not included in server export." in baseline_audit
+    assert "## Synthetic Telemetry Summary" in baseline_audit
+    assert "## Deterministic Rule Trace" in baseline_audit
+    assert "Fireworks may provide an optional non-authoritative reviewer explanation only." in baseline_audit
+    assert "No autonomous operational action." in baseline_audit
     assert "## Simulated Resolution" in simulated_export
     assert "After reviewStatus: REVIEW_PACKET_COMPLETE" in simulated_export
+    assert "## Audit Simulation Details" in simulated_audit
 
     packet = json.loads(review_json)
     assert packet == build_review_packet(case)
@@ -239,6 +258,7 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             trace_status, trace_json = fetch(base_url, f"/cases/{case_id}/trace.json")
             evidence_status, evidence_json = fetch(base_url, f"/cases/{case_id}/evidence.json")
             export_status, export_md = fetch(base_url, f"/cases/{case_id}/export.md")
+            audit_status, audit_md = fetch(base_url, f"/cases/{case_id}/audit.md")
             ai_status, ai_page = fetch(base_url, f"/ai-review?caseId={case_id}")
             ai_json_status, ai_json = fetch(base_url, f"/ai-review.json?caseId={case_id}")
 
@@ -247,9 +267,13 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert trace_status == 200
             assert evidence_status == 200
             assert export_status == 200
+            assert audit_status == 200
             assert ai_status == 200
             assert ai_json_status == 200
             assert "Reviewer checklist" in review_page
+            assert "Local demo notes only. Not uploaded, not persisted server-side." in review_page
+            assert "Packet completeness" in review_page
+            assert "Review session summary" in review_page
             assert "No autonomous operational action." in review_page
             assert "Deterministic Rule Trace" in review_page
             assert "Synthetic temperature timeline" in review_page
@@ -259,6 +283,14 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert "No autonomous operational action." in export_md
             assert "## Deterministic Rule Trace" in export_md
             assert "## Synthetic Telemetry Summary" in export_md
+            assert "## Deterministic Rule Trace" in audit_md
+            assert "## Synthetic Telemetry Summary" in audit_md
+            assert "## Reviewer Local Notes" in audit_md
+            assert "Fireworks output is optional, quality-gated, and non-authoritative." in audit_md
+            for page_text in (review_page, export_md, audit_md):
+                lowered = page_text.lower()
+                for forbidden in ("approved", "released", "safe for distribution", "compliant", "certified"):
+                    assert forbidden not in lowered, (case_id, forbidden)
 
             trace = json.loads(trace_json)
             rule_ids = {row["ruleId"] for row in trace["trace"]}

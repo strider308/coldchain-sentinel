@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from ai_review_assistant import build_ai_review
-from case_engine import case_packet, evidence_json, export_markdown, get_case, load_cases, trace_json
+from case_engine import audit_markdown, case_packet, evidence_json, export_markdown, get_case, load_cases, trace_json
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture
 
 HOST = "127.0.0.1"
@@ -218,6 +218,7 @@ def render_cases() -> str:
           <a class="button" href="/cases/{html.escape(case["caseId"])}/trace.json">Trace JSON</a>
           <a class="button" href="/cases/{html.escape(case["caseId"])}/evidence.json">Evidence JSON</a>
           <a class="button" href="/cases/{html.escape(case["caseId"])}/export.md">Export</a>
+          <a class="button" href="/cases/{html.escape(case["caseId"])}/audit.md">Audit packet</a>
           <a class="button" href="/ai-review?caseId={html.escape(case["caseId"])}">Fireworks brief</a>
         </div>
       </article>
@@ -261,7 +262,7 @@ def render_case_detail(case_id: str) -> str:
   <header data-testid="case-detail">
     <h1>{html.escape(case["caseTitle"])}</h1>
     <p>{html.escape(case["scenarioSummary"])}</p>
-    <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/review">Reviewer workspace</a><a href="/cases/{html.escape(case_id)}/trace.json">Trace JSON</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a><a href="/ai-review?caseId={html.escape(case_id)}">AI Review</a><a href="/ai-review.json?caseId={html.escape(case_id)}">AI JSON</a></nav>
+    <nav><a href="/cases">Cases</a><a href="/cases/{html.escape(case_id)}/review">Reviewer workspace</a><a href="/cases/{html.escape(case_id)}/trace.json">Trace JSON</a><a href="/cases/{html.escape(case_id)}/evidence.json">Evidence JSON</a><a href="/cases/{html.escape(case_id)}/export.md">Export packet</a><a href="/cases/{html.escape(case_id)}/audit.md">Audit packet</a><a href="/ai-review?caseId={html.escape(case_id)}">AI Review</a><a href="/ai-review.json?caseId={html.escape(case_id)}">AI JSON</a></nav>
     {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("No autonomous action", "warn")}
   </header>
   <main>
@@ -341,26 +342,70 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
             '<section class="panel status-block" data-testid="simulated-resolution">'
             "<h2>Simulated mapping resolution</h2>"
             "<p>PAL-SYN-1004 is synthetically mapped for review packet completion.</p>"
-            "<p>This is a synthetic review packet completion, not shipment approval.</p>"
+            "<p>This is a synthetic review packet completion, not an operational decision.</p>"
             f"{comparison}</section>"
         )
     checklist_count = len(packet["reviewerChecklist"])
+    sim_key = "simulated" if simulate_resolved else "standard"
+    unresolved_count = len(result["unresolvedPalletIds"])
     checklist_script = f"""
   <script>
     (() => {{
-      const key = "coldchain-checklist:{html.escape(case_id)}";
+      const caseId = "{html.escape(case_id)}";
+      const simState = "{sim_key}";
+      const key = "coldchain-checklist:" + caseId + ":" + simState;
+      const notesKey = "coldchain-notes:" + caseId + ":" + simState;
       const boxes = Array.from(document.querySelectorAll("[data-check-index]"));
       const progress = document.querySelector("[data-check-progress]");
+      const summaryProgress = document.querySelector("[data-session-progress]");
+      const notes = document.querySelector("[data-local-notes]");
+      const notesPresent = document.querySelector("[data-notes-present]");
+      const packetStatus = document.querySelector("[data-packet-completeness]");
+      const copyStatus = document.querySelector("[data-copy-status]");
       const saved = JSON.parse(localStorage.getItem(key) || "{{}}");
       function render() {{
         const reviewed = boxes.filter((box) => box.checked).length;
-        progress.textContent = reviewed + "/{checklist_count} reviewed";
+        const progressText = reviewed + "/{checklist_count} reviewed";
+        progress.textContent = progressText;
+        summaryProgress.textContent = progressText;
+        notesPresent.textContent = notes.value.trim() ? "yes" : "no";
+        packetStatus.textContent = reviewed === 0
+          ? "DEMO_PACKET_INCOMPLETE"
+          : (reviewed === boxes.length && {unresolved_count} === 0 ? "DEMO_PACKET_READY_FOR_HUMAN_REVIEW_ARCHIVE" : "DEMO_PACKET_REVIEWING");
         const state = Object.fromEntries(boxes.map((box) => [box.dataset.checkIndex, box.checked]));
         localStorage.setItem(key, JSON.stringify(state));
+        localStorage.setItem(notesKey, notes.value);
       }}
       boxes.forEach((box) => {{
         box.checked = Boolean(saved[box.dataset.checkIndex]);
         box.addEventListener("change", render);
+      }});
+      notes.value = localStorage.getItem(notesKey) || "";
+      notes.addEventListener("input", render);
+      document.querySelector("[data-clear-local-session]").addEventListener("click", () => {{
+        boxes.forEach((box) => {{ box.checked = false; }});
+        notes.value = "";
+        localStorage.removeItem(key);
+        localStorage.removeItem(notesKey);
+        render();
+      }});
+      document.querySelector("[data-copy-session-summary]").addEventListener("click", async () => {{
+        const text = [
+          "ColdChain Sentinel local demo review session",
+          "caseId: " + caseId,
+          "simulationMode: " + simState,
+          "checklistProgress: " + progress.textContent,
+          "localNotesPresent: " + notesPresent.textContent,
+          "autonomousActionsAllowed: false",
+          "localNotes:",
+          notes.value || "(none)"
+        ].join("\\n");
+        try {{
+          await navigator.clipboard.writeText(text);
+          copyStatus.textContent = "Local session summary copied.";
+        }} catch (_error) {{
+          copyStatus.textContent = text;
+        }}
       }});
       render();
     }})();
@@ -371,6 +416,9 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     export_href = f"/cases/{html.escape(case_id)}/export.md"
     if simulate_resolved:
         export_href += "?simulateResolved=true"
+    audit_href = f"/cases/{html.escape(case_id)}/audit.md"
+    if simulate_resolved:
+        audit_href += "?simulateResolved=true"
     evidence_href = f"/cases/{html.escape(case_id)}/evidence.json"
     if simulate_resolved:
         evidence_href += "?simulateResolved=true"
@@ -385,20 +433,22 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     export_panel = (
         f'<section class="panel" data-testid="export-panel"><h2>Export packet</h2>'
         "<p>Markdown and JSON exports contain synthetic review evidence only.</p>"
-        f'<div class="toolbar"><a class="button" href="{trace_href}">Trace JSON</a><a class="button" href="{evidence_href}">Evidence JSON</a><a class="button" href="{export_href}">Export markdown</a></div></section>'
+        f'<div class="toolbar"><a class="button" href="{trace_href}">Trace JSON</a><a class="button" href="{evidence_href}">Evidence JSON</a><a class="button" href="{export_href}">Export markdown</a><a class="button" href="{audit_href}">Audit packet</a></div></section>'
     )
     body = f"""
   <header data-testid="case-review">
     <h1>{html.escape(case["caseTitle"])}</h1>
     <p>{html.escape(case["scenarioSummary"])}</p>
-    <nav><a href="/cases">Cases</a><a href="{trace_href}">Trace JSON</a><a href="{evidence_href}">Evidence JSON</a><a href="{export_href}">Export packet</a><a href="{ai_href}">AI Review Assistant</a><a href="{ai_json_href}">AI JSON</a></nav>
+    <nav><a href="/cases">Cases</a><a href="{trace_href}">Trace JSON</a><a href="{evidence_href}">Evidence JSON</a><a href="{export_href}">Export packet</a><a href="{audit_href}">Audit packet</a><a href="{ai_href}">AI Review Assistant</a><a href="{ai_json_href}">AI JSON</a></nav>
     {badge(result["reviewStatus"], "warn")}{badge(result["finalDisposition"], "danger" if result["finalDisposition"] == "BLOCKED" else "warn")}{badge("Autonomous actions: false", "warn")}
   </header>
   <main>
     {sim_note}
     <section class="grid" data-testid="case-header">
       <article class="panel"><h2>Shipment facts</h2><p class="metric">{html.escape(result["shipmentId"])}</p><p>Case ID: {html.escape(case_id)}</p></article>
-      <article class="panel status-block" data-testid="deterministic-status-card"><h2>Deterministic status</h2><p>finalDisposition: {html.escape(result["finalDisposition"])}</p><p>reviewStatus: {html.escape(result["reviewStatus"])}</p><p>autonomousActionsAllowed: {str(result["autonomousActionsAllowed"]).lower()}</p></article>
+      <article class="panel status-block" data-testid="deterministic-status-card"><h2>Deterministic status</h2><p>finalDisposition: {html.escape(result["finalDisposition"])}</p><p>reviewStatus: {html.escape(result["reviewStatus"])}</p><p>autonomousActionsAllowed: {str(result["autonomousActionsAllowed"]).lower()}</p><p>Synthetic demo only. Not a real-world operational decision. No autonomous action.</p></article>
+      <article class="panel" data-testid="review-session-summary"><h2>Review session summary</h2><p>Selected case: {html.escape(case_id)}</p><p>Simulation mode: {html.escape(sim_key)}</p><p>Checklist progress: <span data-session-progress>0/{checklist_count} reviewed</span></p><p>Local notes present: <span data-notes-present>no</span></p><p>Trace status: available</p><p>Evidence packet: available</p><p>Export packet: available</p><p>autonomousActionsAllowed: false</p></article>
+      <article class="panel" data-testid="packet-completeness-meter"><h2>Packet completeness</h2><p class="metric" data-packet-completeness>DEMO_PACKET_INCOMPLETE</p><p>Demo archive readiness only; not a regulatory or operational status.</p></article>
     </section>
     <section class="panel" data-testid="manual-resolution-panel"><h2>Manual resolution simulation</h2><p>Current unresolved pallet: {html.escape(", ".join(before_packet["result"]["unresolvedPalletIds"]) or "None")}</p><div class="toolbar">{simulation_link}</div></section>
     <section class="panel" data-testid="case-excursion-panel"><h2>Excursion</h2>{excursion_html}</section>
@@ -409,7 +459,8 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
       <article class="panel"><h2>Mapped pallet table</h2>{mapped_table}</article>
       <article class="panel status-block"><h2>Unresolved pallet table</h2>{unresolved_table}</article>
       <article class="panel status-block"><h2>Blocker explanation</h2>{blocker_table}</article>
-      <article class="panel" data-testid="reviewer-checklist-workspace"><h2>Reviewer checklist</h2><p data-check-progress>0/{checklist_count} reviewed</p>{checklist}</article>
+      <article class="panel" data-testid="reviewer-checklist-workspace"><h2>Reviewer checklist</h2><p data-check-progress>0/{checklist_count} reviewed</p><p>Local demo checklist only. Stored in browser localStorage and not sent to the server.</p>{checklist}<button class="button" type="button" data-clear-local-session>Clear local checklist and notes</button></article>
+      <article class="panel" data-testid="local-reviewer-notes"><h2>Reviewer notes</h2><p>Local demo notes only. Not uploaded, not persisted server-side.</p><textarea data-local-notes rows="8" style="width:100%" aria-label="Local demo reviewer notes"></textarea><div class="toolbar"><button class="button" type="button" data-copy-session-summary>Copy local session summary</button></div><p class="muted" data-copy-status></p></article>
       {fireworks_panel}
       {export_panel}
       <article class="panel status-block"><h2>Safety disclaimers</h2><ul>{disclaimers}</ul></article>
@@ -548,6 +599,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         return
                     if parts[2] == "export.md":
                         self.respond_markdown(export_markdown(get_case(selected), simulate_resolved))
+                        return
+                    if parts[2] == "audit.md":
+                        self.respond_markdown(audit_markdown(get_case(selected), simulate_resolved))
                         return
                 except KeyError:
                     self.send_response(404)

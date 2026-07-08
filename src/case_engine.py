@@ -403,3 +403,32 @@ def export_markdown(case: dict[str, Any], simulate_resolved: bool = False) -> st
             "",
         ]
     )
+
+
+def audit_markdown(case: dict[str, Any], simulate_resolved: bool = False) -> str:
+    packet = case_packet(case, simulate_resolved)
+    simulation_lines = []
+    if simulate_resolved and case["caseId"] == BASELINE_CASE_ID:
+        simulation_lines = [
+            "",
+            "## Audit Simulation Details",
+            "- PAL-SYN-1004 is synthetically mapped for local review-session packet completion.",
+            "- This is a demo archive packet state only; no operational action is authorized.",
+        ]
+    return "\n".join(
+        [
+            f'# Audit Packet - {packet["caseTitle"]}',
+            "",
+            export_markdown(case, simulate_resolved),
+            "## Reviewer Local Notes",
+            "Reviewer local notes: stored only in browser localStorage and not included in server export.",
+            "",
+            "## Audit Packet Boundary",
+            "- Local checklist and notes are browser-only demo state.",
+            "- Fireworks output is optional, quality-gated, and non-authoritative.",
+            "- Deterministic rules remain authoritative.",
+            "- No autonomous operational action is allowed.",
+            *simulation_lines,
+            "",
+        ]
+    )
