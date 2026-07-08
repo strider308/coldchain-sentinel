@@ -1,0 +1,157 @@
+{
+  "sentinel_native_v1": [
+    {
+      "name": "clean",
+      "payload": {
+        "timestampUtc": "2026-06-26T10:30:00Z",
+        "sensorId": "SYN-SENSOR-A1",
+        "shipmentId": "SYN-SHIP-2026-06-26-A",
+        "zoneId": "Z1",
+        "temperatureC": 9.2,
+        "humidityPercent": 58.0,
+        "batteryPercent": 91.0,
+        "signalStrength": 74.0,
+        "doorOpen": false,
+        "readingSequence": 103
+      }
+    },
+    {
+      "name": "missing_optional",
+      "payload": {
+        "timestampUtc": "2026-06-26T10:35:00Z",
+        "sensorId": "SYN-SENSOR-A2",
+        "shipmentId": "SYN-SHIP-2026-06-26-A",
+        "zoneId": "Z1",
+        "temperatureC": 8.9,
+        "doorOpen": false,
+        "readingSequence": 104
+      }
+    },
+    {
+      "name": "invalid_temperature",
+      "payload": {
+        "timestampUtc": "2026-06-26T10:40:00Z",
+        "sensorId": "SYN-SENSOR-A3",
+        "shipmentId": "SYN-SHIP-2026-06-26-A",
+        "zoneId": "Z1",
+        "temperatureC": 99.9,
+        "readingSequence": 105
+      }
+    },
+    {
+      "name": "missing_zone",
+      "payload": {
+        "timestampUtc": "2026-06-26T10:45:00Z",
+        "sensorId": "SYN-SENSOR-A4",
+        "shipmentId": "SYN-SHIP-2026-06-26-A",
+        "temperatureC": 7.4,
+        "readingSequence": 106
+      }
+    }
+  ],
+  "vendor_flat_csv_v1": [
+    {
+      "name": "clean",
+      "payload": {
+        "ts": "2026-06-26T10:30:00Z",
+        "device": "FLAT-001",
+        "shipment": "SYN-SHIP-2026-06-26-A",
+        "zone": "Z1",
+        "temp_c": "9.1",
+        "humidity": "57.2",
+        "battery": "88",
+        "rssi": "-61",
+        "door": "false",
+        "seq": "201"
+      }
+    },
+    {
+      "name": "missing_optional",
+      "payload": {
+        "ts": "2026-06-26T10:35:00Z",
+        "device": "FLAT-002",
+        "shipment": "SYN-SHIP-2026-06-26-A",
+        "zone": "Z1",
+        "temp_c": "8.4",
+        "door": "false",
+        "seq": "202"
+      }
+    },
+    {
+      "name": "invalid_temperature",
+      "payload": {
+        "ts": "2026-06-26T10:40:00Z",
+        "device": "FLAT-003",
+        "shipment": "SYN-SHIP-2026-06-26-A",
+        "zone": "Z1",
+        "temp_c": "101",
+        "seq": "203"
+      }
+    },
+    {
+      "name": "missing_zone",
+      "payload": {
+        "ts": "2026-06-26T10:45:00Z",
+        "device": "FLAT-004",
+        "shipment": "SYN-SHIP-2026-06-26-A",
+        "temp_c": "6.2",
+        "seq": "204"
+      }
+    }
+  ],
+  "vendor_nested_iot_v1": [
+    {
+      "name": "clean_fahrenheit",
+      "payload": {
+        "meta": {"deviceId": "IOT-001", "gatewayId": "GW-1", "firmwareVersion": "1.4.2"},
+        "shipment": {"id": "SYN-SHIP-2026-06-26-A", "containerId": "SYN-CONT-01"},
+        "reading": {
+          "timestamp": "2026-06-26T10:30:00Z",
+          "temperature": {"value": 48.2, "unit": "F"},
+          "humidity": {"value": 56.5},
+          "battery": {"percent": 84},
+          "signal": {"rssi": -58},
+          "doorOpen": false,
+          "sequence": 301
+        }
+      }
+    },
+    {
+      "name": "missing_optional",
+      "payload": {
+        "meta": {"deviceId": "IOT-002"},
+        "shipment": {"id": "SYN-SHIP-2026-06-26-A"},
+        "reading": {
+          "timestamp": "2026-06-26T10:35:00Z",
+          "temperature": {"value": 7.1, "unit": "C"},
+          "doorOpen": false,
+          "sequence": 302
+        }
+      }
+    },
+    {
+      "name": "invalid_temperature",
+      "payload": {
+        "meta": {"deviceId": "IOT-003"},
+        "shipment": {"id": "SYN-SHIP-2026-06-26-A"},
+        "reading": {
+          "timestamp": "2026-06-26T10:40:00Z",
+          "temperature": {"value": 140, "unit": "C"},
+          "sequence": 303
+        }
+      }
+    },
+    {
+      "name": "missing_zone",
+      "payload": {
+        "meta": {"deviceId": "IOT-004"},
+        "shipment": {"id": "SYN-SHIP-2026-06-26-A"},
+        "reading": {
+          "timestamp": "2026-06-26T10:45:00Z",
+          "temperature": {"value": 6.8, "unit": "C"},
+          "sequence": 304
+        }
+      }
+    }
+  ]
+}

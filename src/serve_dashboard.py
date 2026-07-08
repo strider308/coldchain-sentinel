@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from ai_review_assistant import build_ai_review
 from case_engine import audit_markdown, case_packet, evidence_json, export_markdown, get_case, load_cases, trace_json
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture
+from sensor_adapters import adapter_summary, canonical_schema, example_results
 from sensor_engine import benchmark_model, cleaning_report, consensus_report, prediction_report, sensor_summary, sensor_window, sers_risk
 
 HOST = "127.0.0.1"
@@ -217,6 +218,11 @@ def command_center_payload() -> dict[str, Any]:
         "mode": "synthetic_hackathon_beta",
         "betaTotalGeneratedReadings": totals["betaTotalGeneratedReadings"],
         "caseCount": totals["caseCount"],
+        "sensorAdapterSummary": {
+            "sensorAdaptersAvailable": True,
+            "dataContractVersion": "v2",
+            "supportedSyntheticAdapterFormats": adapter_summary()["supportedSyntheticAdapterFormats"],
+        },
         "sensorSummary": {
             "readingsPerCase": totals["readingsPerCase"],
             "sensorCount": totals["sensorCount"],
@@ -271,6 +277,8 @@ def command_center_payload() -> dict[str, Any]:
         },
         "routeMap": {
             "sensorLab": "/sensor-lab",
+            "sensorAdapters": "/sensor-adapters",
+            "dataContract": "/data-contract",
             "dataPipeline": "/data-pipeline",
             "cleaningReport": "/cases/blocked-unresolved-pallet/cleaning-report.json",
             "prediction": "/cases/blocked-unresolved-pallet/prediction.json",
@@ -458,6 +466,7 @@ def render_command_center() -> str:
   </header>
   <main>
     <section class="grid">
+      <article class="panel" data-testid="command-adapter-summary"><h2>Sensor Adapter status</h2><p>Data Contract v2 is available for synthetic vendor-style payload normalization.</p><p>Supported synthetic formats: {html.escape(", ".join(payload["sensorAdapterSummary"]["supportedSyntheticAdapterFormats"]))}.</p><div class="toolbar"><a class="button" href="/sensor-adapters">Sensor Adapters</a><a class="button" href="/data-contract">Data Contract</a></div></article>
       <article class="panel" data-testid="command-sensor-summary"><h2>Sensor telemetry summary</h2><p class="metric">{payload["betaTotalGeneratedReadings"]}</p><p>Total synthetic readings represented across beta. Readings per case: {payload["sensorSummary"]["readingsPerCase"]}. Sensors: {payload["sensorSummary"]["sensorCount"]}. Zones: {payload["sensorSummary"]["zoneCount"]}. Time range: {payload["sensorSummary"]["timeRangeHours"]} hours. Interval: {payload["sensorSummary"]["readingIntervalMinutes"]} minutes.</p><p>Synthetic data only.</p><div class="toolbar"><a class="button" href="/sensor-lab">Sensor Lab</a><a class="button" href="/sensor-lab.json">Sensor JSON</a></div></article>
       <article class="panel" data-testid="command-cleaning-summary"><h2>Data cleaning summary</h2><p>Accepted readings: {cleaning["acceptedReadings"]}. Rejected readings: {cleaning["rejectedReadings"]}. Duplicates: {cleaning["duplicateCount"]}. Dropouts: {cleaning["dropoutCount"]}. Outliers: {cleaning["outlierCount"]}. Drift: {cleaning["driftCount"]}. Low battery: {cleaning["lowBatteryCount"]}. Weak signal: {cleaning["weakSignalCount"]}.</p><div class="toolbar"><a class="button" href="/data-pipeline">Data Pipeline</a><a class="button" href="/cases/blocked-unresolved-pallet/cleaning-report.json">Cleaning JSON</a></div></article>
       <article class="panel" data-testid="command-consensus-summary"><h2>Redundancy and consensus summary</h2><p>Sensor trust score: {consensus["sensorTrustScore"]}. Zone consensus score: {consensus["zoneConsensusScore"]}. Consensus label: {html.escape(consensus["consensusLabel"])}.</p><p>Redundancy compares neighboring synthetic sensors so one bad sensor is treated as a review signal, not a final conclusion.</p></article>
@@ -613,6 +622,9 @@ def system_status_json() -> dict[str, Any]:
         "mode": "synthetic_hackathon_beta",
         "caseCount": totals["caseCount"],
         "sensorLabAvailable": True,
+        "sensorAdaptersAvailable": True,
+        "dataContractVersion": "v2",
+        "supportedSyntheticAdapterFormats": adapter_summary()["supportedSyntheticAdapterFormats"],
         "betaTotalGeneratedReadings": totals["betaTotalGeneratedReadings"],
         "deterministicEngineAvailable": True,
         "rulesTraceAvailable": True,
@@ -765,12 +777,97 @@ def render_roadmap() -> str:
     return page("ColdChain Sentinel Roadmap", body)
 
 
+def data_contract_json() -> dict[str, Any]:
+    return {
+        "appName": "ColdChain Sentinel",
+        "dataContractVersion": "v2",
+        "schema": canonical_schema(),
+        "supportedSyntheticAdapterFormats": adapter_summary()["supportedSyntheticAdapterFormats"],
+        "fieldsAffectingCleaningConsensusSers": [
+            "timestampUtc",
+            "sensorId",
+            "zoneId",
+            "temperatureC",
+            "humidityPercent",
+            "batteryPercent",
+            "signalStrength",
+            "doorOpen",
+            "readingSequence",
+        ],
+        "evidenceFields": ["timestampUtc", "sensorId", "shipmentId", "zoneId", "temperatureC", "sourceFormat"],
+        "neverAuthorizesAutonomousAction": True,
+        "syntheticOnly": True,
+    }
+
+
+def render_data_contract() -> str:
+    schema = canonical_schema()
+    rows = table(
+        ["Field", "Role"],
+        [[field, "required" if field in schema["requiredFields"] else "optional"] for field in schema["fields"]],
+        "data-contract-fields",
+    )
+    body = f"""
+  <header data-testid="data-contract-page">
+    {global_nav()}
+    <h1>Data Contract v2</h1>
+    <p>Synthetic sensor payloads are normalized into one internal schema before cleaning, consensus, SERS, and deterministic review packet generation.</p>
+  </header>
+  <main>
+    <section class="panel"><h2>Contract boundary</h2><p>Raw sensors may send native, flat logistics, or nested IoT-style payloads. ColdChain Sentinel normalizes timestamps, device identity, shipment context, zone, temperature, humidity, battery, signal, door state, sequence, firmware, gateway, and adapter provenance.</p><p>Required fields are validated. Optional context can produce warnings. No field can authorize autonomous operational action.</p></section>
+    <section class="panel"><h2>Normalized fields</h2>{rows}</section>
+    <section class="panel"><h2>Route links</h2><div class="toolbar"><a class="button" href="/sensor-adapters">Sensor Adapters</a><a class="button" href="/data-contract.json">Contract JSON</a><a class="button" href="/data-pipeline">Data Pipeline</a></div></section>
+  </main>
+"""
+    return page("ColdChain Sentinel Data Contract", body)
+
+
+def sensor_adapters_json(source_format: str | None = None) -> dict[str, Any]:
+    payload = adapter_summary()
+    payload["examples"] = example_results(source_format)["formats"]
+    return payload
+
+
+def render_sensor_adapters() -> str:
+    results = example_results()
+    rows = []
+    cards = []
+    for source_format, examples in results["formats"].items():
+        clean = examples[0]
+        rows.append([source_format, str(len(examples)), str(clean["accepted"]).lower(), ", ".join(clean["warnings"]) or "None"])
+        cards.append(
+            f"""
+      <article class="panel" data-testid="adapter-{html.escape(source_format)}">
+        <h2>{html.escape(source_format)}</h2>
+        <p>Raw example:</p><pre>{html.escape(json.dumps(clean["rawPayload"], sort_keys=True, indent=2))}</pre>
+        <p>Normalized output example:</p><pre>{html.escape(json.dumps(clean["normalizedReading"], sort_keys=True, indent=2))}</pre>
+        <p>Accepted: {str(clean["accepted"]).lower()}. Warnings: {html.escape(", ".join(clean["warnings"]) or "None")}. Errors: {html.escape(", ".join(clean["errors"]) or "None")}.</p>
+        <div class="toolbar"><a class="button" href="/sensor-adapters/example.json?format={html.escape(source_format)}">Example JSON</a></div>
+      </article>
+"""
+        )
+    body = f"""
+  <header data-testid="sensor-adapters-page">
+    {global_nav()}
+    <h1>Sensor Adapters</h1>
+    <p>Deterministic synthetic adapters normalize vendor-style payloads into Data Contract v2 before cleaning pipeline checks.</p>
+  </header>
+  <main>
+    <section class="panel"><h2>Supported synthetic adapter formats</h2>{table(["Format", "Examples", "Clean accepted", "Clean warnings"], rows, "adapter-summary-table")}</section>
+    <section class="grid">{"".join(cards)}</section>
+    <section class="panel status-block"><h2>Safety boundary</h2><p>Adapters normalize synthetic payloads only. They do not call external sensor APIs and cannot change deterministic review facts or allow autonomous action.</p></section>
+  </main>
+"""
+    return page("ColdChain Sentinel Sensor Adapters", body)
+
+
 def data_pipeline_json() -> dict[str, Any]:
     return {
         "syntheticOnly": True,
         "stages": [
-            "raw synthetic readings",
-            "normalization",
+            "raw vendor payload",
+            "adapter normalization",
+            "schema validation",
             "cleaning",
             "redundancy consensus",
             "SERS advisory risk score",
@@ -786,8 +883,9 @@ def render_data_pipeline() -> str:
     rows = table(
         ["Stage", "Purpose"],
         [
-            ["Raw readings", "Synthetic sensor payload with temperature, humidity, battery, signal, door state, sequence, and delay."],
-            ["Normalization", "Coerce fields into a consistent schema and validate required values."],
+            ["Raw vendor payload", "Synthetic native, flat logistics, or nested IoT-style sensor payload."],
+            ["Adapter normalization", "Map source fields into Data Contract v2."],
+            ["Schema validation", "Validate required fields and emit warnings for missing recommended context."],
             ["Cleaning", "Reject duplicates and impossible values; flag dropout, drift, outlier, low-battery, and weak-signal readings."],
             ["Redundancy consensus", "Compare neighboring sensors in a zone/time window for trust and conflict signals."],
             ["SERS risk score", "Advisory proprietary score from excursion severity, consensus, quality issues, door state, humidity, and evidence completeness."],
@@ -800,9 +898,9 @@ def render_data_pipeline() -> str:
   <header data-testid="data-pipeline-page">
     {global_nav()}
     <h1>Data Pipeline</h1>
-    <p>raw readings -> normalization -> cleaning -> redundancy consensus -> SERS risk score -> deterministic rule trace -> review packet</p>
+    <p>raw vendor payload -> adapter normalization -> schema validation -> cleaning -> redundancy consensus -> SERS risk score -> deterministic rule trace -> review packet</p>
   </header>
-  <main><section class="panel">{rows}</section></main>
+  <main><section class="panel">{rows}</section><section class="panel"><div class="toolbar"><a class="button" href="/sensor-adapters">Sensor Adapters</a><a class="button" href="/data-contract">Data Contract v2</a></div></section></main>
 """
     return page("ColdChain Sentinel Data Pipeline", body)
 
@@ -1214,6 +1312,28 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/roadmap":
             self.respond_text(render_roadmap())
+            return
+        if path == "/data-contract":
+            self.respond_text(render_data_contract())
+            return
+        if path == "/data-contract.json":
+            self.respond_json(data_contract_json())
+            return
+        if path == "/sensor-adapters":
+            self.respond_text(render_sensor_adapters())
+            return
+        if path == "/sensor-adapters.json":
+            self.respond_json(sensor_adapters_json())
+            return
+        if path == "/sensor-adapters/example.json":
+            source_format = query.get("format", [None])[0]
+            if not source_format:
+                self.respond_json(example_results())
+                return
+            try:
+                self.respond_json(example_results(source_format))
+            except KeyError:
+                self.respond_json({"error": "unknown synthetic adapter format", "format": source_format})
             return
         if path == "/data-pipeline":
             self.respond_text(render_data_pipeline())

@@ -21,6 +21,7 @@ sys.path.insert(0, str(SRC))
 import ai_review_assistant  # noqa: E402
 from case_engine import case_packet, get_case, load_cases  # noqa: E402
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture  # noqa: E402
+from sensor_adapters import SUPPORTED_FORMATS, first_example, normalize  # noqa: E402
 from sensor_engine import (  # noqa: E402
     cleaning_report,
     consensus_report,
@@ -137,6 +138,52 @@ def test_rendered_pages(case: dict[str, Any]) -> None:
     )
 
 
+def test_sensor_adapters_normalize_and_validate() -> None:
+    for source_format in SUPPORTED_FORMATS:
+        clean = normalize(source_format, first_example(source_format))
+        assert clean["accepted"] is True
+        assert clean["errors"] == []
+        normalized = clean["normalizedReading"]
+        assert normalized["sourceFormat"] == source_format
+        assert normalized["adapterVersion"] == "sensor-adapter-v2-synthetic"
+        assert set(("timestampUtc", "sensorId", "shipmentId", "temperatureC")).issubset(normalized)
+
+        bad = dict(first_example(source_format))
+        if source_format == "sentinel_native_v1":
+            bad["temperatureC"] = 99.9
+            missing = dict(bad)
+            missing.pop("timestampUtc", None)
+        elif source_format == "vendor_flat_csv_v1":
+            bad["temp_c"] = "99.9"
+            missing = dict(bad)
+            missing.pop("ts", None)
+        else:
+            bad = json.loads(json.dumps(bad))
+            bad["reading"]["temperature"]["value"] = 99.9
+            bad["reading"]["temperature"]["unit"] = "C"
+            missing = json.loads(json.dumps(bad))
+            missing["reading"].pop("timestamp", None)
+
+        rejected = normalize(source_format, bad)
+        assert rejected["accepted"] is False
+        assert any("temperatureC" in error for error in rejected["errors"])
+
+        missing_required = normalize(source_format, missing)
+        assert missing_required["accepted"] is False
+        assert any("missing required field" in error for error in missing_required["errors"])
+
+    optional = {
+        "timestampUtc": "2026-06-26T10:35:00Z",
+        "sensorId": "SYN-OPTIONAL",
+        "shipmentId": "SYN-SHIP-2026-06-26-A",
+        "temperatureC": 6.2,
+    }
+    warning_result = normalize("sentinel_native_v1", optional)
+    assert warning_result["accepted"] is True
+    assert "missing recommended field: readingSequence" in warning_result["warnings"]
+    assert "missing recommended field: zoneId" in warning_result["warnings"]
+
+
 def fetch(base_url: str, path: str) -> tuple[int, str]:
     with urllib.request.urlopen(base_url + path, timeout=5) as response:
         return response.status, response.read().decode("utf-8")
@@ -165,6 +212,14 @@ def test_routes(case: dict[str, Any]) -> None:
         cases_status, cases_page = fetch(base_url, "/cases")
         sensor_lab_status, sensor_lab = fetch(base_url, "/sensor-lab")
         sensor_lab_json_status, sensor_lab_json = fetch(base_url, "/sensor-lab.json")
+        data_contract_status, data_contract = fetch(base_url, "/data-contract")
+        data_contract_json_status, data_contract_json = fetch(base_url, "/data-contract.json")
+        sensor_adapters_status, sensor_adapters = fetch(base_url, "/sensor-adapters")
+        sensor_adapters_json_status, sensor_adapters_json = fetch(base_url, "/sensor-adapters.json")
+        adapter_example_statuses = [
+            fetch(base_url, f"/sensor-adapters/example.json?format={source_format}")
+            for source_format in SUPPORTED_FORMATS
+        ]
         data_pipeline_status, data_pipeline = fetch(base_url, "/data-pipeline")
         data_pipeline_json_status, data_pipeline_json = fetch(base_url, "/data-pipeline.json")
         model_benchmark_status, model_benchmark = fetch(base_url, "/model-benchmark")
@@ -218,6 +273,11 @@ def test_routes(case: dict[str, Any]) -> None:
     assert cases_status == 200
     assert sensor_lab_status == 200
     assert sensor_lab_json_status == 200
+    assert data_contract_status == 200
+    assert data_contract_json_status == 200
+    assert sensor_adapters_status == 200
+    assert sensor_adapters_json_status == 200
+    assert all(status == 200 for status, _ in adapter_example_statuses)
     assert data_pipeline_status == 200
     assert data_pipeline_json_status == 200
     assert model_benchmark_status == 200
@@ -254,6 +314,9 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Model benchmark summary" in command_center
     assert "Deterministic review packet summary" in command_center
     assert "Fireworks safety-gate summary" in command_center
+    assert "Sensor Adapter status" in command_center
+    assert "/sensor-adapters" in command_center
+    assert "/data-contract" in command_center
     assert "No real data" in command_center
     assert "No autonomous operational actions" in command_center
     assert "Deterministic fallback remains authoritative" in command_center
@@ -272,7 +335,13 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "201,600 synthetic readings" in sensor_lab
     assert "large synthetic sensor stream" in sensor_lab
     assert "Sensor Lab" in sensor_lab
-    assert "raw readings -> normalization" in data_pipeline
+    assert "raw vendor payload -> adapter normalization -> schema validation" in data_pipeline
+    assert "Data Contract v2" in data_contract
+    assert "No field can authorize autonomous operational action" in data_contract
+    assert "Sensor Adapters" in sensor_adapters
+    assert "sentinel_native_v1" in sensor_adapters
+    assert "vendor_flat_csv_v1" in sensor_adapters
+    assert "vendor_nested_iot_v1" in sensor_adapters
     assert "On deterministic synthetic benchmark data only." in model_benchmark
     assert "No external datasets are ingested" in public_data_page
     assert "not ingested" in public_data_page
@@ -371,6 +440,9 @@ def test_routes(case: dict[str, Any]) -> None:
     prediction_json = json.loads(prediction_text)
     sensor_lab_payload = json.loads(sensor_lab_json)
     command_payload = json.loads(command_center_json)
+    contract_payload = json.loads(data_contract_json)
+    adapters_payload = json.loads(sensor_adapters_json)
+    adapter_examples = [json.loads(body) for _, body in adapter_example_statuses]
     pipeline_payload = json.loads(data_pipeline_json)
     benchmark_payload = json.loads(model_benchmark_json)
     system_status = json.loads(system_status_json)
@@ -397,14 +469,22 @@ def test_routes(case: dict[str, Any]) -> None:
     assert 0 <= prediction_json["sers"]["riskScore"] <= 100
     assert prediction_json["sers"]["riskBand"] in ("LOW", "WATCH", "REVIEW", "CRITICAL")
     assert pipeline_payload["stages"] == [
-        "raw synthetic readings",
-        "normalization",
+        "raw vendor payload",
+        "adapter normalization",
+        "schema validation",
         "cleaning",
         "redundancy consensus",
         "SERS advisory risk score",
         "deterministic rule trace",
         "human-review packet",
     ]
+    assert contract_payload["dataContractVersion"] == "v2"
+    assert contract_payload["neverAuthorizesAutonomousAction"] is True
+    assert "sourceFormat" in contract_payload["schema"]["fields"]
+    assert adapters_payload["dataContractVersion"] == "v2"
+    assert adapters_payload["supportedSyntheticAdapterFormats"] == SUPPORTED_FORMATS
+    assert all(payload["dataContractVersion"] == "v2" for payload in adapter_examples)
+    assert all(list(payload["formats"]) == [source_format] for payload, source_format in zip(adapter_examples, SUPPORTED_FORMATS))
     assert benchmark_payload["benchmarkScope"] == "On deterministic synthetic benchmark data only."
     assert "naiveCurrentTemperatureThreshold" in benchmark_payload["baselines"]
     assert "rollingAverageThreshold" in benchmark_payload["baselines"]
@@ -435,6 +515,9 @@ def test_routes(case: dict[str, Any]) -> None:
     assert system_status["autonomousActionsAllowed"] is False
     assert system_status["fireworksAuthoritative"] is False
     assert system_status["sensorLabAvailable"] is True
+    assert system_status["sensorAdaptersAvailable"] is True
+    assert system_status["dataContractVersion"] == "v2"
+    assert system_status["supportedSyntheticAdapterFormats"] == SUPPORTED_FORMATS
     assert system_status["reviewWorkspaceAvailable"] is True
     assert system_status["betaTotalGeneratedReadings"] == 41472
     assert validation_payload["realDataUsed"] is False

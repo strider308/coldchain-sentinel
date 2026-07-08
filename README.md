@@ -125,6 +125,13 @@ http://127.0.0.1:18080/
 - `/cases` - synthetic case workspace.
 - `/sensor-lab` - high-volume synthetic sensor aggregation UI.
 - `/sensor-lab.json` - machine-readable sensor lab summaries.
+- `/data-contract` - Data Contract v2 normalized sensor schema.
+- `/data-contract.json` - machine-readable Data Contract v2 schema.
+- `/sensor-adapters` - synthetic vendor-style sensor adapter examples.
+- `/sensor-adapters.json` - machine-readable adapter summary and examples.
+- `/sensor-adapters/example.json?format=sentinel_native_v1` - native synthetic adapter example.
+- `/sensor-adapters/example.json?format=vendor_flat_csv_v1` - flat CSV-style synthetic adapter example.
+- `/sensor-adapters/example.json?format=vendor_nested_iot_v1` - nested IoT-style synthetic adapter example.
 - `/data-pipeline` - raw-to-review data pipeline explanation.
 - `/data-pipeline.json` - machine-readable pipeline stages.
 - `/model-benchmark` - synthetic benchmark report for advisory model output.
@@ -196,6 +203,7 @@ Final judge/investor flow:
 - Evidence, trace, review packet, and audit packet exports.
 - Safe unknown-case page listing available synthetic case IDs.
 - Platform Command Center that connects sensor telemetry, cleaning, consensus, SERS, benchmarks, deterministic review packets, Fireworks safety gates, and readiness checks.
+- Data Contract v2 and synthetic sensor adapters for native, flat CSV-style, and nested IoT-style payloads.
 
 ## Deterministic Rule Trace
 
@@ -212,6 +220,16 @@ Aggregation functions calculate readings per sensor and zone, min/max/average te
 The app does not ask reviewers to inspect every reading. It compresses high-volume synthetic telemetry into deterministic evidence, rule traces, and human-review packets. Sensor routes return summaries or capped windows; `/cases/{caseId}/sensor-window.json` defaults to 100 readings and caps `limit` at 500.
 
 `/sensor-lab.json` and `/system-status.json` expose non-secret readiness flags including `realDataUsed: false`, `autonomousActionsAllowed: false`, and `fireworksAuthoritative: false`. `/beta-readiness` shows the judge-facing readiness checklist, and `/validation-evidence` lists local validation evidence without claiming live deployment status before smoke testing.
+
+## Sensor Adapter And Data Contract v2
+
+`/data-contract` documents the normalized internal schema used before cleaning, consensus, SERS, and deterministic review packet generation. `/sensor-adapters` demonstrates three synthetic adapter formats:
+
+- `sentinel_native_v1`
+- `vendor_flat_csv_v1`
+- `vendor_nested_iot_v1`
+
+Adapters are deterministic, local, and synthetic-only. They do not call external sensor APIs, ingest real customer data, or authorize operational action.
 
 ## Sensor Intelligence Pipeline
 
@@ -370,6 +388,7 @@ Phase 4:
 
 - `docs/ARCHITECTURE.md`
 - `docs/SENSOR_DATA_CONTRACT.md`
+- `docs/SENSOR_ADAPTERS.md`
 - `docs/CLEANING_PIPELINE.md`
 - `docs/CONSENSUS_ENGINE.md`
 - `docs/SERS_ALGORITHM.md`
