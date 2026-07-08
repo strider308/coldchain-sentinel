@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from ai_review_assistant import build_ai_review
 from case_engine import audit_markdown, case_packet, evidence_json, export_markdown, get_case, load_cases, trace_json
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture
-from sensor_engine import sensor_summary, sensor_window
+from sensor_engine import benchmark_model, cleaning_report, consensus_report, prediction_report, sensor_summary, sensor_window, sers_risk
 
 HOST = "127.0.0.1"
 PORT = 8080
@@ -48,7 +48,7 @@ def global_nav() -> str:
     return (
         '<nav class="global-nav" data-testid="global-nav">'
         '<a href="/">Home</a><a href="/cases">Cases</a><a href="/review" data-testid="review-packet-link">Baseline Review</a>'
-        '<a href="/sensor-lab">Sensor Lab</a><a href="/ai-review" data-testid="ai-review-link">AI Review</a><a href="/health">Health</a>'
+        '<a href="/sensor-lab">Sensor Lab</a><a href="/data-pipeline">Pipeline</a><a href="/model-benchmark">Benchmark</a><a href="/ai-review" data-testid="ai-review-link">AI Review</a><a href="/health">Health</a>'
         '<a href="https://github.com/strider308/coldchain-sentinel">GitHub repo</a>'
         "</nav>"
     )
@@ -165,6 +165,22 @@ def sensor_summary_panel(case_id: str, summary: dict[str, Any]) -> str:
         <p>Noisy/dropped readings: {summary["aggregationSummary"]["rejectedNoisyReadingCount"]}. Impacted zones: {html.escape(", ".join(summary["impactedZones"]) or "None")}.</p>
         <p>Evidence IDs: {html.escape(", ".join(eid for window in summary["excursionWindows"] for eid in window["evidenceIds"]) or "None")}.</p>
         <div class="toolbar"><a class="button" href="/cases/{html.escape(case_id)}/sensor-summary.json">Sensor summary JSON</a><a class="button" href="/cases/{html.escape(case_id)}/sensor-window.json?offset=0&limit=100">First 100 readings</a></div>
+      </article>
+"""
+
+
+def sensor_intelligence_panel(case_id: str, clean: dict[str, Any], consensus: dict[str, Any], risk: dict[str, Any]) -> str:
+    zone_scores = ", ".join(
+        f'{zone["zoneId"]}: {zone["zoneConsensusScore"]} ({zone["consensusLabel"]})' for zone in consensus["zones"]
+    )
+    return f"""
+      <article class="panel" data-testid="sensor-intelligence-panel">
+        <h2>Sensor Intelligence</h2>
+        <p>Accepted readings: {clean["acceptedReadingCount"]}. Rejected readings: {clean["rejectedReadingCount"]}. Duplicates: {clean["duplicateCount"]}.</p>
+        <p>Dropouts: {clean["flagCounts"]["FLAGGED_DROPOUT"]}. Outliers: {clean["flagCounts"]["FLAGGED_OUTLIER"]}. Consensus: {html.escape(zone_scores)}</p>
+        <p>SERS risk score: {risk["riskScore"]}. Risk band: {risk["riskBand"]}. Prediction horizon: 30 minutes.</p>
+        <p>Advisory only. SERS and model predictions do not alter deterministic review facts.</p>
+        <div class="toolbar"><a class="button" href="/cases/{html.escape(case_id)}/cleaning-report.json">Cleaning report</a><a class="button" href="/cases/{html.escape(case_id)}/prediction.json">Prediction JSON</a><a class="button" href="/model-benchmark">Model benchmark</a><a class="button" href="/data-pipeline">Data pipeline</a></div>
       </article>
 """
 
@@ -446,6 +462,7 @@ def render_sensor_lab() -> str:
       <p>Judges do not need to inspect every reading. ColdChain Sentinel compresses high-volume synthetic telemetry into deterministic evidence, rule traces, and human-review packets.</p>
       <p>Flow: large synthetic sensor stream to aggregation to threshold and excursion detection to sensor quality filtering to zone impact to pallet mapping to deterministic rule trace to human-review packet.</p>
     </section>
+    <section class="panel" data-testid="sensor-lab-next-links"><h2>Investor-grade beta checks</h2><div class="toolbar"><a class="button" href="/data-pipeline">Data pipeline</a><a class="button" href="/model-benchmark">Model benchmark</a><a class="button" href="/public-data-readiness">Public data readiness</a></div></section>
     <section class="panel" data-testid="aggregation-capabilities"><h2>What is aggregated</h2><ul>{capabilities}</ul></section>
     <section class="panel" data-testid="optional-scale-profile"><h2>Optional synthetic scale profile</h2><p>Optional synthetic scale profile - generated summary only.</p><p>100 sensors, 7 days, 5-minute interval, about 201,600 synthetic readings. Not rendered by default and not a production-scale claim.</p></section>
     <section class="grid" aria-label="Sensor lab cases">{"".join(cards)}</section>
@@ -530,6 +547,89 @@ def render_validation_evidence() -> str:
     return page("ColdChain Sentinel Validation Evidence", body)
 
 
+def data_pipeline_json() -> dict[str, Any]:
+    return {
+        "syntheticOnly": True,
+        "stages": [
+            "raw synthetic readings",
+            "normalization",
+            "cleaning",
+            "redundancy consensus",
+            "SERS advisory risk score",
+            "deterministic rule trace",
+            "human-review packet",
+        ],
+        "fireworksAuthoritative": False,
+        "autonomousActionsAllowed": False,
+    }
+
+
+def render_data_pipeline() -> str:
+    rows = table(
+        ["Stage", "Purpose"],
+        [
+            ["Raw readings", "Synthetic sensor payload with temperature, humidity, battery, signal, door state, sequence, and delay."],
+            ["Normalization", "Coerce fields into a consistent schema and validate required values."],
+            ["Cleaning", "Reject duplicates and impossible values; flag dropout, drift, outlier, low-battery, and weak-signal readings."],
+            ["Redundancy consensus", "Compare neighboring sensors in a zone/time window for trust and conflict signals."],
+            ["SERS risk score", "Advisory proprietary score from excursion severity, consensus, quality issues, door state, humidity, and evidence completeness."],
+            ["Deterministic rule trace", "Authoritative rules derive excursion, pallet impact, blockers, and review status."],
+            ["Human-review packet", "Reviewer workspace and audit exports; no autonomous action."],
+        ],
+        "data-pipeline-table",
+    )
+    body = f"""
+  <header data-testid="data-pipeline-page">
+    {global_nav()}
+    <h1>Data Pipeline</h1>
+    <p>raw readings -> normalization -> cleaning -> redundancy consensus -> SERS risk score -> deterministic rule trace -> review packet</p>
+  </header>
+  <main><section class="panel">{rows}</section></main>
+"""
+    return page("ColdChain Sentinel Data Pipeline", body)
+
+
+def model_benchmark_json() -> dict[str, Any]:
+    return benchmark_model(load_cases())
+
+
+def render_model_benchmark() -> str:
+    benchmark = model_benchmark_json()
+    baseline_rows = [[name, str(values["accuracy"]), str(values["precision"]), str(values["recall"])] for name, values in benchmark["baselines"].items()]
+    metric_rows = [["SYN-LR-0.1", str(benchmark["metrics"]["accuracy"]), str(benchmark["metrics"]["precision"]), str(benchmark["metrics"]["recall"])]]
+    body = f"""
+  <header data-testid="model-benchmark-page">
+    {global_nav()}
+    <h1>Model Benchmark</h1>
+    <p>On deterministic synthetic benchmark data only. Predictions are advisory and never alter deterministic review facts.</p>
+  </header>
+  <main>
+    <section class="panel"><h2>Model</h2><p>{html.escape(benchmark["model"]["modelName"])}. Training rows: {benchmark["model"]["trainingRows"]}. Test rows: {benchmark["model"]["testRows"]}. Horizon: {benchmark["model"]["predictionHorizonMinutes"]} minutes.</p>{table(["Model", "Accuracy", "Precision", "Recall"], metric_rows, "model-metrics")}</section>
+    <section class="panel"><h2>Simple baselines</h2>{table(["Baseline", "Accuracy", "Precision", "Recall"], baseline_rows, "baseline-metrics")}</section>
+    <section class="panel status-block"><h2>Claims boundary</h2><p>{html.escape(benchmark["claimsBoundary"])}</p></section>
+  </main>
+"""
+    return page("ColdChain Sentinel Model Benchmark", body)
+
+
+def render_public_data_readiness() -> str:
+    rows = [
+        ["Public cold-chain/vaccine temperature datasets", "External benchmark enrichment", "not verified", "pending", "not ingested", "License, schema, and provenance not confirmed."],
+        ["Public IoT sensor anomaly datasets", "Noise/anomaly benchmarking", "not verified", "partial", "not ingested", "Domain fit and TOS not confirmed."],
+        ["Public time-series sensor datasets", "Model robustness experiments", "not verified", "unknown", "not ingested", "Schema and provenance not confirmed."],
+        ["public-apis style directories", "Discovery only", "directory only", "not a dataset", "not ingested", "Discovery tools are not data sources."],
+    ]
+    body = f"""
+  <header data-testid="public-data-readiness-page">
+    {global_nav()}
+    <h1>Public Data Readiness</h1>
+    <p>No external datasets are ingested in this beta. Candidate sources remain gated until license, schema, and provenance are verified.</p>
+  </header>
+  <main><section class="panel">{table(["Candidate source", "Possible use", "License/TOS", "Schema compatibility", "Ingestion status", "Reason"], rows, "public-data-readiness-table")}</section></main>
+"""
+    return page("ColdChain Sentinel Public Data Readiness", body)
+
+
 def render_case_detail(case_id: str) -> str:
     case = get_case(case_id)
     packet = case_packet(case)
@@ -560,6 +660,9 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     before_packet = case_packet(case)
     result = packet["result"]
     sensors = sensor_summary(case, result)
+    clean = cleaning_report(case)
+    consensus = consensus_report(case)
+    risk = sers_risk(case, result)
     sensor_preview = sensor_window(case, 0, 8)
     excursion = result["excursion"]
     mapped_table = table(
@@ -739,6 +842,7 @@ def render_case_review(case_id: str, simulate_resolved: bool = False) -> str:
     <section class="panel" data-testid="manual-resolution-panel"><h2>Manual resolution simulation</h2><p>Current unresolved pallet: {html.escape(", ".join(before_packet["result"]["unresolvedPalletIds"]) or "None")}</p><div class="toolbar">{simulation_link}</div></section>
     <section class="panel" data-testid="case-excursion-panel"><h2>Excursion</h2>{excursion_html}</section>
     {sensor_summary_panel(case_id, sensors)}
+    {sensor_intelligence_panel(case_id, clean, consensus, risk)}
     <section class="panel" data-testid="sensor-window-preview-panel"><h2>Sensor window preview</h2><p>Small deterministic sample window only; use JSON route with offset and capped limit for paging.</p>{sensor_preview_table(sensor_preview["readings"])}</section>
     <section class="panel" data-testid="synthetic-telemetry-timeline"><h2>Synthetic temperature timeline</h2><p>Threshold: {case["thresholdMaxC"]} C. Above-threshold readings are labeled as review signals.</p>{excursion_html}{telemetry}</section>
     <section class="panel" data-testid="evidence-timeline"><h2>Evidence timeline</h2><ul>{timeline}</ul></section>
@@ -881,6 +985,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/validation-evidence":
             self.respond_text(render_validation_evidence())
             return
+        if path == "/data-pipeline":
+            self.respond_text(render_data_pipeline())
+            return
+        if path == "/data-pipeline.json":
+            self.respond_json(data_pipeline_json())
+            return
+        if path == "/model-benchmark":
+            self.respond_text(render_model_benchmark())
+            return
+        if path == "/model-benchmark.json":
+            self.respond_json(model_benchmark_json())
+            return
+        if path == "/public-data-readiness":
+            self.respond_text(render_public_data_readiness())
+            return
         if path == "/cases":
             self.respond_text(render_cases())
             return
@@ -919,6 +1038,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             self.respond_json({"error": "offset and limit must be integers"})
                             return
                         self.respond_json(sensor_window(get_case(selected), offset, limit))
+                        return
+                    if parts[2] == "cleaning-report.json":
+                        self.respond_json(cleaning_report(get_case(selected)))
+                        return
+                    if parts[2] == "prediction.json":
+                        packet = case_packet(get_case(selected), simulate_resolved)
+                        self.respond_json(prediction_report(get_case(selected), packet["result"], load_cases()))
                         return
                 except KeyError:
                     self.respond_text(render_not_found(parts[1]), 404)

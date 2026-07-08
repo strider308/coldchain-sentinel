@@ -10,6 +10,8 @@ The beta app also includes a small static synthetic case workspace for reviewing
 
 The case workspace now includes a deterministic telemetry engine and rule trace so reviewers can see how synthetic readings become a review packet: telemetry, excursion detection, zone impact, pallet mapping, blockers, review status, and autonomous-action denial.
 
+The beta now frames the product as a synthetic sensor intelligence platform: raw readings are normalized, cleaned, checked for redundancy, scored by an advisory Sentinel Excursion Risk Score, and benchmarked against simple synthetic baselines before any human-review packet is shown.
+
 ## Why It Matters
 
 Cold-chain teams need a clear bridge from raw telemetry to review-ready evidence. This demo shows that consequential logistics decisions should expose missing evidence instead of hiding it behind an automated answer.
@@ -121,10 +123,17 @@ http://127.0.0.1:18080/
 - `/cases` - synthetic case workspace.
 - `/sensor-lab` - high-volume synthetic sensor aggregation UI.
 - `/sensor-lab.json` - machine-readable sensor lab summaries.
+- `/data-pipeline` - raw-to-review data pipeline explanation.
+- `/data-pipeline.json` - machine-readable pipeline stages.
+- `/model-benchmark` - synthetic benchmark report for advisory model output.
+- `/model-benchmark.json` - benchmark metrics against simple baselines.
+- `/public-data-readiness` - public dataset readiness gate; no datasets are ingested yet.
 - `/cases/blocked-unresolved-pallet` - case detail page.
 - `/cases/blocked-unresolved-pallet/review` - reviewer workspace.
 - `/cases/blocked-unresolved-pallet/sensor-summary.json` - deterministic synthetic sensor aggregation summary.
 - `/cases/blocked-unresolved-pallet/sensor-window.json?offset=0&limit=100` - capped synthetic sensor reading window.
+- `/cases/blocked-unresolved-pallet/cleaning-report.json` - deterministic cleaning, duplicate, dropout, outlier, and signal-quality report.
+- `/cases/blocked-unresolved-pallet/prediction.json` - advisory SERS/model prediction report; deterministic facts remain unchanged.
 - `/cases/blocked-unresolved-pallet/trace.json` - deterministic rule trace JSON.
 - `/cases/blocked-unresolved-pallet/evidence.json` - case evidence timeline JSON.
 - `/cases/blocked-unresolved-pallet/export.md` - markdown export packet.
@@ -146,6 +155,10 @@ http://127.0.0.1:18080/
 - Synthetic telemetry timeline with threshold labels.
 - Large deterministic synthetic sensor stream aggregation, defaulting to 24 sensors over 48 hours at 5-minute intervals.
 - Complete beta total: 41,472 generated synthetic readings across three cases.
+- Cleaning pipeline for duplicate readings, impossible values, dropout, drift, outliers, low battery, and weak signal.
+- Redundancy consensus scoring by zone.
+- Advisory Sentinel Excursion Risk Score (`SERS-0.1-synthetic`).
+- Synthetic training dataset and dependency-free benchmark against simple baselines.
 - Deterministic rule trace that does not depend on Fireworks.
 - Reviewer workspace with local-only checklist and notes.
 - Evidence, trace, review packet, and audit packet exports.
@@ -166,6 +179,24 @@ Aggregation functions calculate readings per sensor and zone, min/max/average te
 The app does not ask reviewers to inspect every reading. It compresses high-volume synthetic telemetry into deterministic evidence, rule traces, and human-review packets. Sensor routes return summaries or capped windows; `/cases/{caseId}/sensor-window.json` defaults to 100 readings and caps `limit` at 500.
 
 `/sensor-lab.json` and `/system-status.json` expose non-secret readiness flags including `realDataUsed: false`, `autonomousActionsAllowed: false`, and `fireworksAuthoritative: false`. `/beta-readiness` shows the judge-facing readiness checklist, and `/validation-evidence` lists local validation evidence without claiming live deployment status before smoke testing.
+
+## Sensor Intelligence Pipeline
+
+Synthetic readings include temperature, humidity, battery percentage, signal strength, door-open state, reading sequence, ingestion delay, and evidence ID. The cleaning layer normalizes fields, rejects duplicate readings and impossible values, and flags dropout, drift, outliers, low battery, and weak signal.
+
+Zone redundancy consensus compares neighboring synthetic sensors, temporal persistence, reading agreement, outliers, dropouts, and signal/battery quality. It emits `sensorTrustScore`, `zoneConsensusScore`, and labels such as `CONSENSUS_STRONG`, `CONSENSUS_PARTIAL`, `CONSENSUS_WEAK`, and `SENSOR_CONFLICT_REVIEW_REQUIRED`.
+
+SERS combines threshold distance, rolling excursion duration, sensor agreement, dropout/outlier penalties, door-open events, humidity movement, unresolved pallet mapping, and evidence completeness into an advisory 0-100 risk score. SERS does not change `finalDisposition`, `reviewStatus`, blockers, pallet mappings, rule trace facts, or `autonomousActionsAllowed`.
+
+## Synthetic Model Benchmark
+
+The benchmark creates an in-memory synthetic training dataset from generated sensor windows. Features include rolling temperature, humidity, quality counts, consensus score, door-open count, and unresolved pallet count. The simple dependency-free classifier is benchmarked only on deterministic synthetic data against a current-temperature threshold baseline and a rolling-average threshold baseline.
+
+Benchmark wording is intentionally bounded: any measured comparison is only against simple baselines on deterministic synthetic benchmark data. No real-world superiority, production readiness, medical validation, or compliance validation is claimed.
+
+## Public Data Readiness
+
+`/public-data-readiness` lists candidate public cold-chain, IoT anomaly, and time-series datasets as not ingested. External data remains gated until license/TOS, schema compatibility, and provenance are verified.
 
 ## Local Review Session
 

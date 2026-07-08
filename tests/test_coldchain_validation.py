@@ -19,7 +19,7 @@ sys.path.insert(0, str(SRC))
 import ai_review_assistant  # noqa: E402
 from case_engine import case_packet, get_case, load_cases  # noqa: E402
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture  # noqa: E402
-from sensor_engine import sensor_summary, sensor_window, synthetic_readings  # noqa: E402
+from sensor_engine import cleaning_report, consensus_report, sensor_summary, sensor_window, sers_risk, synthetic_readings  # noqa: E402
 from serve_dashboard import DashboardHandler, render_ai_review, render_dashboard, render_review_packet  # noqa: E402
 
 
@@ -143,6 +143,11 @@ def test_routes(case: dict[str, Any]) -> None:
         cases_status, cases_page = fetch(base_url, "/cases")
         sensor_lab_status, sensor_lab = fetch(base_url, "/sensor-lab")
         sensor_lab_json_status, sensor_lab_json = fetch(base_url, "/sensor-lab.json")
+        data_pipeline_status, data_pipeline = fetch(base_url, "/data-pipeline")
+        data_pipeline_json_status, data_pipeline_json = fetch(base_url, "/data-pipeline.json")
+        model_benchmark_status, model_benchmark = fetch(base_url, "/model-benchmark")
+        model_benchmark_json_status, model_benchmark_json = fetch(base_url, "/model-benchmark.json")
+        public_data_status, public_data_page = fetch(base_url, "/public-data-readiness")
         baseline_case_status, baseline_case = fetch(base_url, "/cases/blocked-unresolved-pallet")
         baseline_case_review_status, baseline_case_review = fetch(base_url, "/cases/blocked-unresolved-pallet/review")
         simulated_status, simulated_review = fetch(
@@ -161,6 +166,8 @@ def test_routes(case: dict[str, Any]) -> None:
         capped_sensor_window_status, capped_sensor_window = fetch(
             base_url, "/cases/blocked-unresolved-pallet/sensor-window.json?offset=0&limit=900"
         )
+        cleaning_status, cleaning_text = fetch(base_url, "/cases/blocked-unresolved-pallet/cleaning-report.json")
+        prediction_status, prediction_text = fetch(base_url, "/cases/blocked-unresolved-pallet/prediction.json")
         simulated_export_status, simulated_export = fetch(
             base_url, "/cases/blocked-unresolved-pallet/export.md?simulateResolved=true"
         )
@@ -185,6 +192,11 @@ def test_routes(case: dict[str, Any]) -> None:
     assert cases_status == 200
     assert sensor_lab_status == 200
     assert sensor_lab_json_status == 200
+    assert data_pipeline_status == 200
+    assert data_pipeline_json_status == 200
+    assert model_benchmark_status == 200
+    assert model_benchmark_json_status == 200
+    assert public_data_status == 200
     assert baseline_case_status == 200
     assert baseline_case_review_status == 200
     assert simulated_status == 200
@@ -195,6 +207,8 @@ def test_routes(case: dict[str, Any]) -> None:
     assert baseline_sensor_summary_status == 200
     assert baseline_sensor_window_status == 200
     assert capped_sensor_window_status == 200
+    assert cleaning_status == 200
+    assert prediction_status == 200
     assert simulated_export_status == 200
     assert simulated_audit_status == 200
     assert missing_status == 404
@@ -216,6 +230,10 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "201,600 synthetic readings" in sensor_lab
     assert "large synthetic sensor stream" in sensor_lab
     assert "Sensor Lab" in sensor_lab
+    assert "raw readings -> normalization" in data_pipeline
+    assert "On deterministic synthetic benchmark data only." in model_benchmark
+    assert "No external datasets are ingested" in public_data_page
+    assert "not ingested" in public_data_page
     assert 'data-testid="global-nav"' in dashboard
     assert 'data-testid="global-nav"' in cases_page
     assert 'data-testid="global-nav"' in baseline_case_review
@@ -303,7 +321,11 @@ def test_routes(case: dict[str, Any]) -> None:
     sensor_summary_json = json.loads(baseline_sensor_summary)
     sensor_window_json = json.loads(baseline_sensor_window)
     capped_window_json = json.loads(capped_sensor_window)
+    cleaning_json = json.loads(cleaning_text)
+    prediction_json = json.loads(prediction_text)
     sensor_lab_payload = json.loads(sensor_lab_json)
+    pipeline_payload = json.loads(data_pipeline_json)
+    benchmark_payload = json.loads(model_benchmark_json)
     system_status = json.loads(system_status_json)
     assert evidence["caseId"] == "blocked-unresolved-pallet"
     assert evidence["result"]["finalDisposition"] == "BLOCKED"
@@ -319,6 +341,27 @@ def test_routes(case: dict[str, Any]) -> None:
     assert len(sensor_window_json["readings"]) <= 100
     assert capped_window_json["limit"] == 500
     assert all("qualityLabel" in row for row in sensor_window_json["readings"])
+    assert cleaning_json["duplicateCount"] > 0
+    assert cleaning_json["flagCounts"]["FLAGGED_DROPOUT"] > 0
+    assert cleaning_json["flagCounts"]["FLAGGED_OUTLIER"] > 0
+    assert prediction_json["advisoryOnly"] is True
+    assert prediction_json["deterministicResultUnchanged"] == sensor_summary_json["deterministicResult"]
+    assert 0 <= prediction_json["sers"]["riskScore"] <= 100
+    assert prediction_json["sers"]["riskBand"] in ("LOW", "WATCH", "REVIEW", "CRITICAL")
+    assert pipeline_payload["stages"] == [
+        "raw synthetic readings",
+        "normalization",
+        "cleaning",
+        "redundancy consensus",
+        "SERS advisory risk score",
+        "deterministic rule trace",
+        "human-review packet",
+    ]
+    assert benchmark_payload["benchmarkScope"] == "On deterministic synthetic benchmark data only."
+    assert "naiveCurrentTemperatureThreshold" in benchmark_payload["baselines"]
+    assert "rollingAverageThreshold" in benchmark_payload["baselines"]
+    assert "accuracy" in benchmark_payload["metrics"]
+    assert "confusionMatrix" in benchmark_payload["metrics"]
     assert sensor_lab_payload["syntheticOnly"] is True
     assert sensor_lab_payload["betaTotalGeneratedReadings"] == 41472
     assert sensor_lab_payload["readingsPerCase"] == 13824
@@ -362,6 +405,8 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             audit_status, audit_md = fetch(base_url, f"/cases/{case_id}/audit.md")
             sensor_summary_status, sensor_summary_text = fetch(base_url, f"/cases/{case_id}/sensor-summary.json")
             sensor_window_status, sensor_window_text = fetch(base_url, f"/cases/{case_id}/sensor-window.json")
+            cleaning_status, cleaning_text = fetch(base_url, f"/cases/{case_id}/cleaning-report.json")
+            prediction_status, prediction_text = fetch(base_url, f"/cases/{case_id}/prediction.json")
             ai_status, ai_page = fetch(base_url, f"/ai-review?caseId={case_id}")
             ai_json_status, ai_json = fetch(base_url, f"/ai-review.json?caseId={case_id}")
 
@@ -373,6 +418,8 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert audit_status == 200
             assert sensor_summary_status == 200
             assert sensor_window_status == 200
+            assert cleaning_status == 200
+            assert prediction_status == 200
             assert ai_status == 200
             assert ai_json_status == 200
             assert "Reviewer checklist" in review_page
@@ -418,6 +465,8 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             evidence = json.loads(evidence_json)
             sensor_case_summary = json.loads(sensor_summary_text)
             sensor_case_window = json.loads(sensor_window_text)
+            prediction_case = json.loads(prediction_text)
+            cleaning_case = json.loads(cleaning_text)
             assert evidence["result"]["autonomousActionsAllowed"] is False
             assert evidence["telemetryTimeline"]
             assert evidence["trace"]
@@ -425,6 +474,9 @@ def test_case_routes_and_invariants(case: dict[str, Any]) -> None:
             assert sensor_case_summary["generatedReadingCount"] == 13824
             assert len(sensor_case_window["readings"]) <= 100
             assert all(row["qualityLabel"].startswith("SENSOR_") for row in sensor_case_window["readings"])
+            assert cleaning_case["duplicateCount"] >= 1
+            assert prediction_case["advisoryOnly"] is True
+            assert prediction_case["deterministicResultUnchanged"] == case_packet(get_case(case_id))["result"]
             ai_packet = json.loads(ai_json)
             assert ai_packet["deterministicResult"]["autonomousActionsAllowed"] is False
             assert ai_packet["deterministicResult"] == case_packet(get_case(case_id))["result"]
@@ -472,11 +524,22 @@ def test_sensor_generator_deterministic() -> None:
     first = synthetic_readings(case)[:20]
     second = synthetic_readings(case)[:20]
     summary = sensor_summary(case, case_packet(case)["result"])
+    clean = cleaning_report(case)
+    consensus = consensus_report(case)
+    risk = sers_risk(case, case_packet(case)["result"])
     assert first == second
+    assert {"humidityPercent", "batteryPercent", "signalStrength", "doorOpen", "readingSequence", "ingestionDelaySeconds"} <= set(first[0])
     assert summary["generatedReadingCount"] == 13824
     assert summary["excursionWindows"][0]["durationMinutes"] == 45
     assert summary["impactedZones"] == ["Z1"]
     assert summary["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+    assert clean["duplicateCount"] > 0
+    assert clean["flagCounts"]["FLAGGED_DROPOUT"] > 0
+    assert clean["flagCounts"]["FLAGGED_OUTLIER"] > 0
+    assert consensus["zones"]
+    assert all("zoneConsensusScore" in zone for zone in consensus["zones"])
+    assert 0 <= risk["riskScore"] <= 100
+    assert risk["riskBand"] in ("LOW", "WATCH", "REVIEW", "CRITICAL")
     assert sensor_window(case, 0, 900)["limit"] == 500
 
 
