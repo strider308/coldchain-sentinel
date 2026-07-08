@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
+import ai_review_assistant  # noqa: E402
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture  # noqa: E402
 from serve_dashboard import DashboardHandler, render_ai_review, render_dashboard, render_review_packet  # noqa: E402
 
@@ -163,6 +164,131 @@ def test_routes(case: dict[str, Any]) -> None:
     assert health == {"ok": True, "providers": "disabled"}
 
 
+class FakeResponse:
+    def __init__(self, body: dict[str, Any]) -> None:
+        self.body = body
+
+    def __enter__(self) -> "FakeResponse":
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self.body).encode("utf-8")
+
+
+def fireworks_body(content: str) -> dict[str, Any]:
+    return {"choices": [{"message": {"content": content}}]}
+
+
+def with_fake_fireworks(content: str) -> tuple[list[dict[str, Any]], Any]:
+    calls: list[dict[str, Any]] = []
+    original = urllib.request.urlopen
+
+    def fake_urlopen(request: urllib.request.Request, timeout: int) -> FakeResponse:
+        assert timeout == ai_review_assistant.TIMEOUT_SECONDS
+        calls.append(json.loads(request.data.decode("utf-8")))  # type: ignore[union-attr]
+        return FakeResponse(fireworks_body(content))
+
+    urllib.request.urlopen = fake_urlopen  # type: ignore[assignment]
+    return calls, original
+
+
+def restore_fireworks(original_urlopen: Any, old_key: str | None) -> None:
+    urllib.request.urlopen = original_urlopen  # type: ignore[assignment]
+    if old_key is None:
+        os.environ.pop("FIREWORKS_API_KEY", None)
+    else:
+        os.environ["FIREWORKS_API_KEY"] = old_key
+
+
+def test_fireworks_missing_key_fallback(case: dict[str, Any]) -> None:
+    packet = build_review_packet(case)
+    old_key = os.environ.pop("FIREWORKS_API_KEY", None)
+    try:
+        review = ai_review_assistant.build_ai_review(packet)
+    finally:
+        if old_key is not None:
+            os.environ["FIREWORKS_API_KEY"] = old_key
+
+    assert review["assistant"]["provider"]["fireworksVerified"] is False
+    assert review["assistant"]["provider"]["status"] == "Fireworks not configured"
+    assert review["deterministicResult"]["finalDisposition"] == "BLOCKED"
+
+
+def test_fireworks_unstructured_fallback(case: dict[str, Any]) -> None:
+    packet = build_review_packet(case)
+    calls, original = with_fake_fireworks("not json")
+    old_key = os.environ.get("FIREWORKS_API_KEY")
+    os.environ["FIREWORKS_API_KEY"] = "test-key"
+    try:
+        review = ai_review_assistant.build_ai_review(packet)
+    finally:
+        restore_fireworks(original, old_key)
+
+    assert calls[0]["response_format"]["type"] == "json_schema"
+    assert calls[0]["reasoning_effort"] == "none"
+    assert review["assistant"]["provider"]["fireworksVerified"] is False
+    assert "structured verification pending" in review["assistant"]["provider"]["status"]
+    assert review["deterministicResult"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+
+
+def test_fireworks_missing_required_json_key_fallback(case: dict[str, Any]) -> None:
+    packet = build_review_packet(case)
+    incomplete_brief = {
+        "summary": "Reviewer brief only.",
+        "whyBlocked": ["Missing mapping remains unresolved."],
+        "missingEvidence": ["PAL-SYN-1004 zone mapping."],
+        "reviewerChecklist": ["Resolve missing mapping."],
+        "safetyNote": "Deterministic rules remain authoritative.",
+    }
+    _, original = with_fake_fireworks(json.dumps(incomplete_brief))
+    old_key = os.environ.get("FIREWORKS_API_KEY")
+    os.environ["FIREWORKS_API_KEY"] = "test-key"
+    try:
+        review = ai_review_assistant.build_ai_review(packet)
+    finally:
+        restore_fireworks(original, old_key)
+
+    assert review["assistant"]["provider"]["fireworksVerified"] is False
+    assert "structured verification pending" in review["assistant"]["provider"]["status"]
+    assert review["deterministicResult"]["finalDisposition"] == "BLOCKED"
+
+
+def test_fireworks_structured_json_accepted_and_non_authoritative(case: dict[str, Any]) -> None:
+    packet = build_review_packet(case)
+    provider_brief = {
+        "summary": "Reviewer brief only.",
+        "whyBlocked": ["Missing mapping remains unresolved."],
+        "missingEvidence": ["PAL-SYN-1004 zone mapping."],
+        "reviewerChecklist": ["Resolve missing mapping."],
+        "rootCauseHypotheses": ["Mapping feed omitted one pallet."],
+        "safetyNote": "Deterministic rules remain authoritative.",
+        "finalDisposition": "RELEASED",
+        "reviewStatus": "COMPLETE",
+        "unresolvedPalletIds": [],
+        "autonomousActionsAllowed": True,
+    }
+    calls, original = with_fake_fireworks(json.dumps(provider_brief))
+    old_key = os.environ.get("FIREWORKS_API_KEY")
+    os.environ["FIREWORKS_API_KEY"] = "test-key"
+    try:
+        review = ai_review_assistant.build_ai_review(packet)
+    finally:
+        restore_fireworks(original, old_key)
+
+    assert calls[0]["response_format"]["type"] == "json_schema"
+    assert review["assistant"]["provider"]["fireworksVerified"] is True
+    assert review["assistant"]["provider"]["structuredOutputMode"] == "json_schema"
+    assert review["assistant"]["provider"]["reasoningEffortNoneAccepted"] is True
+    assert "finalDisposition" not in review["assistant"]["brief"]
+    assert review["deterministicResult"]["finalDisposition"] == "BLOCKED"
+    assert review["deterministicResult"]["reviewStatus"] == "HUMAN_REVIEW_REQUIRED"
+    assert review["deterministicResult"]["unresolvedPalletIds"] == ["PAL-SYN-1004"]
+    assert review["deterministicResult"]["autonomousActionsAllowed"] is False
+
+
 def main() -> None:
     old_key = os.environ.pop("FIREWORKS_API_KEY", None)
     try:
@@ -171,6 +297,10 @@ def main() -> None:
         test_review_packet(case)
         test_rendered_pages(case)
         test_routes(case)
+        test_fireworks_missing_key_fallback(case)
+        test_fireworks_unstructured_fallback(case)
+        test_fireworks_missing_required_json_key_fallback(case)
+        test_fireworks_structured_json_accepted_and_non_authoritative(case)
         print("coldchain validation suite passed")
     finally:
         if old_key is not None:

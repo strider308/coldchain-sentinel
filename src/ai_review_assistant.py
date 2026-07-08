@@ -9,8 +9,22 @@ import urllib.request
 from typing import Any
 
 FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
-DEFAULT_MODEL = "accounts/fireworks/models/deepseek-v3p1"
+DEFAULT_MODEL = "accounts/fireworks/routers/kimi-k2p6-turbo"
 TIMEOUT_SECONDS = 12
+BRIEF_KEYS = ["summary", "whyBlocked", "missingEvidence", "reviewerChecklist", "rootCauseHypotheses", "safetyNote"]
+BRIEF_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": BRIEF_KEYS,
+    "properties": {
+        "summary": {"type": "string"},
+        "whyBlocked": {"type": "array", "items": {"type": "string"}},
+        "missingEvidence": {"type": "array", "items": {"type": "string"}},
+        "reviewerChecklist": {"type": "array", "items": {"type": "string"}},
+        "rootCauseHypotheses": {"type": "array", "items": {"type": "string"}},
+        "safetyNote": {"type": "string"},
+    },
+}
 
 
 def fallback_brief(packet: dict[str, Any], reason: str) -> dict[str, Any]:
@@ -55,24 +69,79 @@ def compact_packet(packet: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
+
+
 def validate_brief(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
-    required = ["summary", "whyBlocked", "missingEvidence", "reviewerChecklist", "rootCauseHypotheses", "safetyNote"]
-    if not all(key in value for key in required):
+    if not all(key in value for key in BRIEF_KEYS):
         return None
-    return value
+    return {
+        "summary": str(value["summary"]),
+        "whyBlocked": string_list(value["whyBlocked"]),
+        "missingEvidence": string_list(value["missingEvidence"]),
+        "reviewerChecklist": string_list(value["reviewerChecklist"]),
+        "rootCauseHypotheses": string_list(value["rootCauseHypotheses"]),
+        "safetyNote": str(value["safetyNote"]),
+    }
 
 
 def build_prompt(packet: dict[str, Any]) -> list[dict[str, str]]:
     system = (
         "You are assisting a human cold-chain reviewer. The supplied deterministic review packet is authoritative. "
+        "Return only valid JSON. No reasoning. No markdown. No prose outside JSON. Do not include chain-of-thought. "
         "Do not change final disposition. Do not recommend autonomous release, quarantine, discard, reroute, or customer notification. "
-        "Summarize only the supplied synthetic review packet. Return concise JSON only with keys: "
+        "Summarize only the supplied synthetic review packet with keys: "
         "summary, whyBlocked, missingEvidence, reviewerChecklist, rootCauseHypotheses, safetyNote."
     )
     user = json.dumps(compact_packet(packet), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def json_schema_format() -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "coldchain_reviewer_brief",
+            "strict": True,
+            "schema": BRIEF_SCHEMA,
+        },
+    }
+
+
+def call_fireworks(api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
+    request = urllib.request.Request(
+        FIREWORKS_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def request_structured_fireworks(api_key: str, payload: dict[str, Any]) -> tuple[dict[str, Any], str, bool]:
+    attempts = [
+        ("json_schema", True, json_schema_format()),
+        ("json_schema", False, json_schema_format()),
+        ("json_object", True, {"type": "json_object"}),
+        ("json_object", False, {"type": "json_object"}),
+    ]
+    last_error: urllib.error.HTTPError | None = None
+    for mode, use_reasoning, response_format in attempts:
+        attempt = dict(payload, response_format=response_format)
+        if use_reasoning:
+            attempt["reasoning_effort"] = "none"
+        try:
+            return call_fireworks(api_key, attempt), mode, use_reasoning
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+    assert last_error is not None
+    raise last_error
 
 
 def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
@@ -87,18 +156,11 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
         "max_tokens": 350,
         "temperature": 0.2,
     }
-    request = urllib.request.Request(
-        FIREWORKS_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
 
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            body = json.loads(response.read().decode("utf-8"))
+        body, structured_mode, reasoning_accepted = request_structured_fireworks(api_key, payload)
     except urllib.error.HTTPError as exc:
-        return fallback_brief(packet, f"Fireworks unavailable: HTTP {exc.code} {exc.reason}")
+        return fallback_brief(packet, f"Fireworks called but structured verification pending: HTTP {exc.code} {exc.reason}")
     except (OSError, TimeoutError, urllib.error.URLError, json.JSONDecodeError) as exc:
         return fallback_brief(packet, f"Fireworks unavailable: {exc.__class__.__name__}")
 
@@ -106,12 +168,10 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
     try:
         brief = validate_brief(json.loads(content))
     except json.JSONDecodeError:
-        fallback = fallback_brief(packet, "Fireworks returned unstructured text")
-        fallback["unstructuredAiResponse"] = content
-        return fallback
+        return fallback_brief(packet, "Fireworks called but structured verification pending: unstructured text")
 
     if brief is None:
-        return fallback_brief(packet, "Fireworks returned invalid JSON")
+        return fallback_brief(packet, "Fireworks called but structured verification pending: invalid JSON")
 
     return {
         "provider": {
@@ -119,7 +179,9 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
             "fireworksVerified": True,
             "fireworksModel": model,
             "amdStatus": "pending/not configured",
-            "status": "Fireworks call succeeded",
+            "status": "Fireworks verified structured reviewer brief",
+            "structuredOutputMode": structured_mode,
+            "reasoningEffortNoneAccepted": reasoning_accepted,
         },
         "brief": brief,
         "unstructuredAiResponse": "",
