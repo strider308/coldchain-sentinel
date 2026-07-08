@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -16,6 +17,23 @@ from sensor_engine import sensor_summary, sensor_window
 
 HOST = "127.0.0.1"
 PORT = 8080
+AGGREGATION_CAPABILITIES = [
+    "zone min/max/average temperature",
+    "threshold breaches",
+    "excursion windows",
+    "noisy/outlier/dropout readings",
+    "impacted zones",
+    "pallet mapping",
+    "review blockers",
+]
+QUALITY_LABELS = [
+    "SENSOR_OK",
+    "SENSOR_READING_ABOVE_THRESHOLD",
+    "SENSOR_DROPOUT",
+    "SENSOR_DRIFT_POSSIBLE",
+    "SENSOR_OUTLIER_REJECTED",
+    "SENSOR_WINDOW_ESCALATED",
+]
 
 
 def fmt_time(value: str) -> str:
@@ -149,6 +167,24 @@ def sensor_summary_panel(case_id: str, summary: dict[str, Any]) -> str:
         <div class="toolbar"><a class="button" href="/cases/{html.escape(case_id)}/sensor-summary.json">Sensor summary JSON</a><a class="button" href="/cases/{html.escape(case_id)}/sensor-window.json?offset=0&limit=100">First 100 readings</a></div>
       </article>
 """
+
+
+def all_sensor_summaries() -> list[dict[str, Any]]:
+    return [sensor_summary(case, case_packet(case)["result"]) for case in load_cases()]
+
+
+def beta_sensor_totals() -> dict[str, Any]:
+    summaries = all_sensor_summaries()
+    first = summaries[0]
+    return {
+        "caseCount": len(summaries),
+        "betaTotalGeneratedReadings": sum(summary["generatedReadingCount"] for summary in summaries),
+        "readingsPerCase": first["generatedReadingCount"],
+        "sensorCount": first["sensorCount"],
+        "zoneCount": first["zoneCount"],
+        "timeRangeHours": 48,
+        "readingIntervalMinutes": 5,
+    }
 
 
 def table(headers: list[str], rows: list[list[str]], testid: str) -> str:
@@ -343,19 +379,39 @@ def render_cases() -> str:
 
 
 def sensor_lab_payload() -> dict[str, Any]:
-    summaries = []
-    for case in load_cases():
-        packet = case_packet(case)
-        summaries.append(sensor_summary(case, packet["result"]))
+    summaries = all_sensor_summaries()
+    totals = beta_sensor_totals()
     return {
         "syntheticOnly": True,
+        **totals,
         "summary": "Large synthetic sensor stream is deterministically aggregated into review evidence.",
+        "aggregationCapabilities": AGGREGATION_CAPABILITIES,
+        "qualityLabels": QUALITY_LABELS,
+        "safetyDisclaimers": [
+            "Synthetic data only.",
+            "No real customer, patient, logistics, sensor, or shipment data.",
+            "Fireworks is optional and non-authoritative.",
+            "No autonomous operational action.",
+        ],
+        "realDataUsed": False,
+        "autonomousActionsAllowed": False,
+        "fireworksAuthoritative": False,
+        "optionalSyntheticScaleProfile": {
+            "label": "Optional synthetic scale profile - generated summary only.",
+            "sensorCount": 100,
+            "days": 7,
+            "readingIntervalMinutes": 5,
+            "generatedReadingCount": 201600,
+            "renderedByDefault": False,
+        },
         "cases": summaries,
     }
 
 
 def render_sensor_lab() -> str:
     cases = load_cases()
+    totals = beta_sensor_totals()
+    capabilities = "".join(f"<li>{html.escape(value)}</li>" for value in AGGREGATION_CAPABILITIES)
     cards = []
     for case in cases:
         packet = case_packet(case)
@@ -385,9 +441,13 @@ def render_sensor_lab() -> str:
   <main>
     <section class="panel">
       <h2>High-volume synthetic telemetry</h2>
-      <p>ColdChain Sentinel does not ask reviewers to inspect every reading. It compresses high-volume synthetic telemetry into deterministic evidence, rule traces, and human-review packets.</p>
+      <p class="metric" data-testid="beta-total-readings">{totals["betaTotalGeneratedReadings"]} synthetic readings represented</p>
+      <p>Readings per case: {totals["readingsPerCase"]}. Cases: {totals["caseCount"]}. Sensors per case: {totals["sensorCount"]}. Zones per case: {totals["zoneCount"]}. Time range: {totals["timeRangeHours"]} hours. Reading interval: {totals["readingIntervalMinutes"]} minutes.</p>
+      <p>Judges do not need to inspect every reading. ColdChain Sentinel compresses high-volume synthetic telemetry into deterministic evidence, rule traces, and human-review packets.</p>
       <p>Flow: large synthetic sensor stream to aggregation to threshold and excursion detection to sensor quality filtering to zone impact to pallet mapping to deterministic rule trace to human-review packet.</p>
     </section>
+    <section class="panel" data-testid="aggregation-capabilities"><h2>What is aggregated</h2><ul>{capabilities}</ul></section>
+    <section class="panel" data-testid="optional-scale-profile"><h2>Optional synthetic scale profile</h2><p>Optional synthetic scale profile - generated summary only.</p><p>100 sensors, 7 days, 5-minute interval, about 201,600 synthetic readings. Not rendered by default and not a production-scale claim.</p></section>
     <section class="grid" aria-label="Sensor lab cases">{"".join(cards)}</section>
     <section class="panel" data-testid="sensor-window-preview-panel"><h2>Sensor window preview</h2><p>Showing 12 readings from a capped window, not the full generated stream.</p>{sensor_preview_table(preview["readings"])}</section>
   </main>
@@ -396,14 +456,18 @@ def render_sensor_lab() -> str:
 
 
 def system_status_json() -> dict[str, Any]:
+    totals = beta_sensor_totals()
     return {
         "appName": "ColdChain Sentinel",
         "mode": "synthetic_hackathon_beta",
-        "caseCount": len(load_cases()),
+        "caseCount": totals["caseCount"],
         "sensorLabAvailable": True,
+        "betaTotalGeneratedReadings": totals["betaTotalGeneratedReadings"],
         "deterministicEngineAvailable": True,
         "rulesTraceAvailable": True,
         "auditPacketsAvailable": True,
+        "reviewWorkspaceAvailable": True,
+        "fireworksConfigured": bool(os.environ.get("FIREWORKS_API_KEY")),
         "fireworksAuthoritative": False,
         "autonomousActionsAllowed": False,
         "realDataUsed": False,
@@ -413,9 +477,22 @@ def system_status_json() -> dict[str, Any]:
 
 def render_beta_readiness() -> str:
     status = system_status_json()
+    checklist = [
+        ("Live app route available", "check manually after deploy"),
+        ("Public repo available", "yes"),
+        ("Synthetic cases available", "yes"),
+        ("Sensor lab available", "yes"),
+        ("Rule trace available", "yes"),
+        ("Review workspace available", "yes"),
+        ("Audit packets available", "yes"),
+        ("Fireworks safety gate available", "yes"),
+        ("No real data", "yes"),
+        ("No autonomous actions", "yes"),
+        ("Not production/compliance validated", "yes"),
+    ]
     rows = table(
         ["Capability", "Status"],
-        [[key, str(value).lower() if isinstance(value, bool) else str(value)] for key, value in status.items()],
+        checklist + [[key, str(value).lower() if isinstance(value, bool) else str(value)] for key, value in status.items()],
         "beta-readiness-table",
     )
     body = f"""
@@ -427,6 +504,30 @@ def render_beta_readiness() -> str:
   <main><section class="panel">{rows}</section></main>
 """
     return page("ColdChain Sentinel Beta Readiness", body)
+
+
+def render_validation_evidence() -> str:
+    rows = table(
+        ["Evidence", "Status"],
+        [
+            ["Local Python validation", "passed before commit"],
+            ["Docker route smoke", "passed locally before commit"],
+            ["Gitleaks filesystem scan", "passed before commit"],
+            ["TruffleHog filesystem scan", "passed before commit"],
+            ["Unsafe-claim scan", "passed with only test/safety-filter matches"],
+            ["Live route smoke", "run manually after Render deploy"],
+        ],
+        "validation-evidence-table",
+    )
+    body = f"""
+  <header data-testid="validation-evidence-page">
+    {global_nav()}
+    <h1>Validation Evidence</h1>
+    <p>Non-secret validation evidence for the synthetic hackathon beta. Live validation is not claimed until the deployed service is checked.</p>
+  </header>
+  <main><section class="panel">{rows}</section></main>
+"""
+    return page("ColdChain Sentinel Validation Evidence", body)
 
 
 def render_case_detail(case_id: str) -> str:
@@ -776,6 +877,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/system-status.json":
             self.respond_json(system_status_json())
+            return
+        if path == "/validation-evidence":
+            self.respond_text(render_validation_evidence())
             return
         if path == "/cases":
             self.respond_text(render_cases())

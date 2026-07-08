@@ -169,6 +169,7 @@ def test_routes(case: dict[str, Any]) -> None:
         )
         missing_status, missing_page = fetch_any(base_url, "/cases/not-a-case")
         beta_status, beta_page = fetch(base_url, "/beta-readiness")
+        validation_status, validation_page = fetch(base_url, "/validation-evidence")
         system_status_code, system_status_json = fetch(base_url, "/system-status.json")
         health_status, health_json = fetch(base_url, "/health")
     finally:
@@ -198,6 +199,7 @@ def test_routes(case: dict[str, Any]) -> None:
     assert simulated_audit_status == 200
     assert missing_status == 404
     assert beta_status == 200
+    assert validation_status == 200
     assert system_status_code == 200
     assert health_status == 200
     assert "Synthetic demo data only." in dashboard
@@ -207,7 +209,11 @@ def test_routes(case: dict[str, Any]) -> None:
     assert "Displayed brief source: deterministic_fallback" in ai_review
     assert "AI-assisted explanation only." in ai_review
     assert "Synthetic Case Workspace" in cases_page
-    assert "ColdChain Sentinel does not ask reviewers to inspect every reading." in sensor_lab
+    assert "Judges do not need to inspect every reading." in sensor_lab
+    assert "41472 synthetic readings represented" in sensor_lab
+    assert "Readings per case: 13824" in sensor_lab
+    assert "Optional synthetic scale profile" in sensor_lab
+    assert "201,600 synthetic readings" in sensor_lab
     assert "large synthetic sensor stream" in sensor_lab
     assert "Sensor Lab" in sensor_lab
     assert 'data-testid="global-nav"' in dashboard
@@ -314,10 +320,30 @@ def test_routes(case: dict[str, Any]) -> None:
     assert capped_window_json["limit"] == 500
     assert all("qualityLabel" in row for row in sensor_window_json["readings"])
     assert sensor_lab_payload["syntheticOnly"] is True
+    assert sensor_lab_payload["betaTotalGeneratedReadings"] == 41472
+    assert sensor_lab_payload["readingsPerCase"] == 13824
+    assert sensor_lab_payload["caseCount"] == 3
+    assert sensor_lab_payload["sensorCount"] == 24
+    assert sensor_lab_payload["zoneCount"] == 4
+    assert sensor_lab_payload["timeRangeHours"] == 48
+    assert sensor_lab_payload["readingIntervalMinutes"] == 5
+    assert sensor_lab_payload["realDataUsed"] is False
+    assert sensor_lab_payload["autonomousActionsAllowed"] is False
+    assert sensor_lab_payload["fireworksAuthoritative"] is False
+    assert "threshold breaches" in sensor_lab_payload["aggregationCapabilities"]
+    assert "SENSOR_OUTLIER_REJECTED" in sensor_lab_payload["qualityLabels"]
     assert system_status["realDataUsed"] is False
     assert system_status["autonomousActionsAllowed"] is False
     assert system_status["fireworksAuthoritative"] is False
+    assert system_status["sensorLabAvailable"] is True
+    assert system_status["reviewWorkspaceAvailable"] is True
+    assert system_status["betaTotalGeneratedReadings"] == 41472
     assert "synthetic_hackathon_beta" in beta_page
+    assert "Sensor lab available" in beta_page
+    assert "No real data" in beta_page
+    assert "No autonomous actions" in beta_page
+    assert "Validation Evidence" in validation_page
+    assert "Docker route smoke" in validation_page
 
 
 def test_case_routes_and_invariants(case: dict[str, Any]) -> None:

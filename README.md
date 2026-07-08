@@ -137,6 +137,7 @@ http://127.0.0.1:18080/
 - `/health` - provider-disabled health status.
 - `/beta-readiness` - synthetic beta capability status page.
 - `/system-status.json` - machine-readable beta safety/status flags.
+- `/validation-evidence` - non-secret local validation evidence page.
 
 `/ai-review` and `/ai-review.json` accept an optional `caseId` query parameter for the synthetic cases, for example `/ai-review?caseId=excursion-fully-mapped`.
 
@@ -144,6 +145,7 @@ http://127.0.0.1:18080/
 
 - Synthetic telemetry timeline with threshold labels.
 - Large deterministic synthetic sensor stream aggregation, defaulting to 24 sensors over 48 hours at 5-minute intervals.
+- Complete beta total: 41,472 generated synthetic readings across three cases.
 - Deterministic rule trace that does not depend on Fireworks.
 - Reviewer workspace with local-only checklist and notes.
 - Evidence, trace, review packet, and audit packet exports.
@@ -157,11 +159,13 @@ Trace items include `ruleId`, rule name, status, input summary, output summary, 
 
 ## Synthetic Sensor Lab
 
-The sensor lab generates high-volume synthetic readings deterministically from compact local case configuration. The default demo scale is 24 sensors, 4 zones, 48 hours, and 5-minute readings, producing 13,824 synthetic readings per case without committing a generated dataset file.
+The sensor lab generates high-volume synthetic readings deterministically from compact local case configuration. The default demo scale is 24 sensors, 4 zones, 48 hours, and 5-minute readings, producing 13,824 synthetic readings per case and 41,472 generated synthetic readings across the three-case beta without committing a generated dataset file.
 
 Aggregation functions calculate readings per sensor and zone, min/max/average temperature, above-threshold counts, consecutive excursion windows, dropout counts, outlier counts, noisy/rejected counts, impacted zones, mapped pallets, unresolved pallets, and evidence IDs. Quality labels include `SENSOR_OK`, `SENSOR_READING_ABOVE_THRESHOLD`, `SENSOR_DROPOUT`, `SENSOR_DRIFT_POSSIBLE`, `SENSOR_OUTLIER_REJECTED`, and `SENSOR_WINDOW_ESCALATED`.
 
 The app does not ask reviewers to inspect every reading. It compresses high-volume synthetic telemetry into deterministic evidence, rule traces, and human-review packets. Sensor routes return summaries or capped windows; `/cases/{caseId}/sensor-window.json` defaults to 100 readings and caps `limit` at 500.
+
+`/sensor-lab.json` and `/system-status.json` expose non-secret readiness flags including `realDataUsed: false`, `autonomousActionsAllowed: false`, and `fireworksAuthoritative: false`. `/beta-readiness` shows the judge-facing readiness checklist, and `/validation-evidence` lists local validation evidence without claiming live deployment status before smoke testing.
 
 ## Local Review Session
 
