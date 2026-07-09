@@ -1,8 +1,8 @@
 ﻿"""AMD evidence route wrapper for ColdChain Sentinel.
 
 This module extends the existing stdlib dashboard without changing deterministic
-review logic. It only surfaces sanitized AMD GPU notebook evidence when the
-committed artifact is present.
+review logic. It surfaces sanitized AMD GPU notebook evidence and, when present,
+the synthetic SERS GPU benchmark artifact.
 """
 
 from __future__ import annotations
@@ -44,52 +44,103 @@ def _safe_json_artifact(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _benchmark_available(benchmark: dict[str, Any] | None) -> bool:
+    return bool(
+        benchmark
+        and benchmark.get("gpuVerified") is True
+        and benchmark.get("benchmarkStatus") == "AMD_GPU_SYNTHETIC_SERS_BENCHMARK_COMPLETE"
+    )
+
+
 def amd_acceleration_json() -> dict[str, Any]:
     evidence = _safe_json_artifact(AMD_ENVIRONMENT_ARTIFACT)
     benchmark = _safe_json_artifact(AMD_SERS_BENCHMARK_ARTIFACT)
 
     gpu_verified = bool(evidence and evidence.get("gpuVerified") and evidence.get("torchCudaAvailable"))
-    benchmark_available = bool(benchmark and benchmark.get("gpuVerified"))
-    device_name = str(evidence.get("deviceName", "")) if evidence else ""
+    benchmark_available = _benchmark_available(benchmark)
+
+    if benchmark_available:
+        allowed_claim = (
+            "AMD ROCm/PyTorch GPU execution was verified, and a synthetic "
+            "SERS-style GPU training benchmark completed in the notebook environment."
+        )
+        claims_scope = "environment verification plus synthetic SERS benchmark evidence"
+        not_claimed = [
+            "real-world validation",
+            "production ML acceleration",
+            "pharma/compliance validation",
+            "specific AMD GPU model",
+            "AMD improved SERS accuracy",
+            "autonomous release/quarantine/discard/reroute/customer notification",
+        ]
+    else:
+        allowed_claim = (
+            "AMD ROCm/PyTorch GPU execution was verified in the notebook environment."
+            if gpu_verified
+            else "No AMD GPU verification claim is made yet."
+        )
+        claims_scope = "environment verification only" if gpu_verified else "none"
+        not_claimed = [
+            "specific AMD GPU model",
+            "SERS GPU training completed",
+            "CPU/GPU speedup proven",
+            "production ML acceleration validated",
+            "real-world cold-chain model trained",
+            "AMD GPU improved SERS accuracy",
+        ]
+
+    cpu_result = benchmark.get("cpuResult") if benchmark_available else None
+    gpu_result = benchmark.get("gpuResult") if benchmark_available else None
 
     return {
         "amdGpuEvidenceStatus": evidence.get("amdGpuEvidenceStatus", "AMD_GPU_VERIFIED") if gpu_verified else "AMD_GPU_EVIDENCE_PENDING",
         "amdGpuVerified": gpu_verified,
-        "amdClaimsAllowed": gpu_verified,
-        "amdClaimsScope": "environment verification only" if gpu_verified else "none",
         "amdBenchmarkAvailable": benchmark_available,
+        "amdClaimsAllowed": gpu_verified,
+        "amdClaimsScope": claims_scope,
+        "allowedClaim": allowed_claim,
+        "benchmarkStatus": benchmark.get("benchmarkStatus") if benchmark_available else None,
         "sersGpuTrainingBenchmarkStatus": "complete" if benchmark_available else "pending",
-        "cpuGpuSpeedupStatus": "pending" if not benchmark_available else "available only if artifact includes CPU/GPU timing",
+        "cpuGpuSpeedupStatus": "measured on synthetic notebook benchmark only" if benchmark_available else "pending",
         "specificGpuModelClaimed": False,
         "device": evidence.get("device") if evidence else None,
         "deviceCount": evidence.get("deviceCount") if evidence else None,
-        "deviceName": device_name,
+        "deviceName": evidence.get("deviceName", "") if evidence else "",
         "deviceNameCaveat": evidence.get("deviceNameNote", "No GPU model name is claimed.") if evidence else "No GPU model name is claimed until evidence exists.",
         "torchVersion": evidence.get("torchVersion") if evidence else None,
         "torchCudaAvailable": bool(evidence.get("torchCudaAvailable")) if evidence else False,
         "rocmSmiAvailable": bool(evidence.get("rocmSmiAvailable")) if evidence else False,
         "rocminfoAvailable": bool(evidence.get("rocminfoAvailable")) if evidence else False,
         "matrixBenchmark": evidence.get("matrixBenchmark") if evidence else None,
-        "allowedClaim": "AMD ROCm/PyTorch GPU execution was verified in the notebook environment." if gpu_verified else "No AMD GPU verification claim is made yet.",
-        "notClaimed": [
-            "specific AMD GPU model",
-            "SERS GPU training completed",
-            "CPU/GPU speedup proven",
-            "production ML acceleration validated",
-            "real-world cold-chain model trained",
-            "AMD GPU improved SERS accuracy"
-        ],
+        "trainingRows": benchmark.get("trainingRows") if benchmark_available else None,
+        "testRows": benchmark.get("testRows") if benchmark_available else None,
+        "featureCount": benchmark.get("featureCount") if benchmark_available else None,
+        "epochs": benchmark.get("epochs") if benchmark_available else None,
+        "cpuResult": cpu_result,
+        "gpuResult": gpu_result,
+        "cpuTrainSeconds": cpu_result.get("trainSeconds") if isinstance(cpu_result, dict) else None,
+        "gpuTrainSeconds": gpu_result.get("trainSeconds") if isinstance(gpu_result, dict) else None,
+        "speedupRatio": benchmark.get("speedupRatio") if benchmark_available else None,
+        "speedupClaimAllowed": bool(benchmark.get("speedupClaimAllowed")) if benchmark_available else False,
+        "metricsClaimScope": benchmark.get("metricsClaimScope", "synthetic benchmark only") if benchmark_available else None,
+        "notClaimed": not_claimed,
         "artifactPaths": {
             "environmentEvidence": "artifacts/amd_gpu_environment_evidence.json",
-            "sersGpuBenchmark": "artifacts/amd_sers_gpu_benchmark.json"
+            "sersGpuBenchmark": "artifacts/amd_sers_gpu_benchmark.json",
         },
         "syntheticOnly": True,
         "realDataUsed": False,
         "productionValidated": False,
         "sersAdvisoryOnly": True,
         "deterministicRulesAuthoritative": True,
-        "autonomousActionsAllowed": False
+        "autonomousActionsAllowed": False,
     }
+
+
+def _fmt(value: Any) -> str:
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    return str(value)
 
 
 def render_amd_acceleration() -> str:
@@ -98,16 +149,40 @@ def render_amd_acceleration() -> str:
     matrix_summary = (
         f'{matrix.get("matrixSize")}x{matrix.get("matrixSize")} matrix, '
         f'{matrix.get("iterations")} iterations, {matrix.get("elapsedSeconds")} seconds'
-        if matrix else "No matrix benchmark artifact available."
+        if matrix
+        else "No matrix benchmark artifact available."
     )
+
+    cpu = payload.get("cpuResult") or {}
+    gpu = payload.get("gpuResult") or {}
+
+    if payload["amdBenchmarkAvailable"]:
+        benchmark_panel = f"""
+      <article class="panel" data-testid="amd-sers-benchmark">
+        <h2>Synthetic SERS GPU benchmark</h2>
+        <p>Benchmark status: {html.escape(str(payload["benchmarkStatus"]))}</p>
+        <p>Training rows: {payload["trainingRows"]}. Test rows: {payload["testRows"]}. Features: {payload["featureCount"]}. Epochs: {payload["epochs"]}.</p>
+        <p>CPU train seconds: {_fmt(payload["cpuTrainSeconds"])}. GPU train seconds: {_fmt(payload["gpuTrainSeconds"])}. Speedup ratio: {_fmt(payload["speedupRatio"])}x.</p>
+        <p>CPU accuracy: {_fmt(cpu.get("accuracy"))}. GPU accuracy: {_fmt(gpu.get("accuracy"))}.</p>
+        <p>CPU precision/recall: {_fmt(cpu.get("precision"))} / {_fmt(cpu.get("recall"))}. GPU precision/recall: {_fmt(gpu.get("precision"))} / {_fmt(gpu.get("recall"))}.</p>
+        <p>In this synthetic notebook run, GPU training was faster than CPU. GPU accuracy was not higher than CPU, so no accuracy-improvement claim is made.</p>
+      </article>
+"""
+    else:
+        benchmark_panel = """
+      <article class="panel" data-testid="amd-sers-benchmark">
+        <h2>Synthetic SERS GPU benchmark</h2>
+        <p>Pending. No SERS GPU training or CPU/GPU speedup claim is made yet.</p>
+      </article>
+"""
 
     body = f"""
   <header data-testid="amd-acceleration-page">
     {global_nav()}
     <h1>AMD GPU Acceleration Evidence</h1>
-    <p>Sanitized notebook evidence for AMD ROCm/PyTorch GPU environment verification.</p>
+    <p>Sanitized notebook evidence for AMD ROCm/PyTorch GPU environment verification and synthetic-only SERS benchmarking.</p>
     {badge("AMD environment: " + payload["amdGpuEvidenceStatus"], "good" if payload["amdGpuVerified"] else "warn")}
-    {badge("SERS GPU benchmark: " + payload["sersGpuTrainingBenchmarkStatus"], "warn")}
+    {badge("SERS GPU benchmark: " + payload["sersGpuTrainingBenchmarkStatus"], "good" if payload["amdBenchmarkAvailable"] else "warn")}
     {badge("Synthetic only", "warn")}
   </header>
   <main>
@@ -124,14 +199,11 @@ def render_amd_acceleration() -> str:
         <p>{html.escape(matrix_summary)}</p>
         <p>Allowed claim: {html.escape(payload["allowedClaim"])}</p>
       </article>
+      {benchmark_panel}
       <article class="panel status-block" data-testid="amd-claim-boundary">
         <h2>Claim boundary</h2>
         <p>{html.escape(payload["deviceNameCaveat"])}</p>
-        <p>No specific GPU model, SERS GPU training completion, CPU/GPU speedup, production acceleration, or real-world training claim is made.</p>
-      </article>
-      <article class="panel" data-testid="amd-next-step">
-        <h2>Next benchmark step</h2>
-        <p>Run the synthetic SERS GPU training notebook and commit only a small sanitized benchmark artifact.</p>
+        <p>No real-world validation, production acceleration, pharma/compliance validation, specific GPU model, autonomous action, or AMD accuracy-improvement claim is made.</p>
       </article>
     </section>
     <section class="panel">
@@ -148,25 +220,26 @@ def render_amd_acceleration() -> str:
 
 
 def gpu_benchmark_plan_json() -> dict[str, Any]:
+    status = amd_acceleration_json()["sersGpuTrainingBenchmarkStatus"]
     return {
-        "benchmarkMode": "planned_synthetic_sers_gpu_training",
-        "currentStatus": amd_acceleration_json()["sersGpuTrainingBenchmarkStatus"],
+        "benchmarkMode": "synthetic_sers_gpu_training",
+        "currentStatus": status,
         "steps": [
             "Generate deterministic synthetic SERS training windows.",
             "Train a dependency-light PyTorch model using cuda when ROCm is available.",
-            "Run CPU fallback timing only if practical in the notebook.",
+            "Measure CPU and GPU timing in the notebook.",
             "Compare SERS metrics against simple baselines on synthetic data.",
             "Export a small sanitized artifacts/amd_sers_gpu_benchmark.json summary.",
-            "Update app evidence without committing raw generated datasets or secrets."
+            "Update app evidence without committing raw generated datasets or secrets.",
         ],
         "requiredArtifact": "artifacts/amd_sers_gpu_benchmark.json",
-        "claimsBoundary": "No SERS GPU training, speedup, production acceleration, real-world validation, or accuracy improvement claim is made until sanitized evidence exists.",
+        "claimsBoundary": "Claims are limited to synthetic notebook benchmark evidence. No real-world, production, pharma/compliance, specific-GPU-model, or accuracy-improvement claim is made.",
         "syntheticOnly": True,
         "realDataUsed": False,
         "productionValidated": False,
         "sersAdvisoryOnly": True,
         "deterministicRulesAuthoritative": True,
-        "autonomousActionsAllowed": False
+        "autonomousActionsAllowed": False,
     }
 
 
@@ -180,7 +253,7 @@ def render_gpu_benchmark_plan() -> str:
   <header data-testid="gpu-benchmark-plan-page">
     {global_nav()}
     <h1>GPU Benchmark Plan</h1>
-    <p>Planned synthetic SERS GPU training evidence flow. No training or speedup claim is made yet.</p>
+    <p>Synthetic SERS GPU benchmark evidence flow. Current status: {html.escape(payload["currentStatus"])}.</p>
   </header>
   <main>
     <section class="panel">
@@ -204,8 +277,9 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "amdGpuVerified": amd["amdGpuVerified"],
         "amdBenchmarkAvailable": amd["amdBenchmarkAvailable"],
         "sersGpuTrainingBenchmarkStatus": amd["sersGpuTrainingBenchmarkStatus"],
+        "speedupRatio": amd["speedupRatio"],
         "specificGpuModelClaimed": False,
-        "claimsScope": amd["amdClaimsScope"]
+        "claimsScope": amd["amdClaimsScope"],
     }
     payload.setdefault("routeMap", {})["amdAcceleration"] = "/amd-acceleration"
     payload.setdefault("routeMap", {})["gpuBenchmarkPlan"] = "/gpu-benchmark-plan"
@@ -214,12 +288,13 @@ def command_center_with_amd_json() -> dict[str, Any]:
 
 def render_command_center_with_amd() -> str:
     payload = amd_acceleration_json()
+    speedup = f'{_fmt(payload["speedupRatio"])}x' if payload.get("speedupRatio") else "pending"
     card = f"""
     <section class="panel" data-testid="amd-acceleration-card">
       <h2>AMD GPU Evidence</h2>
       <p>AMD GPU environment: {html.escape(payload["amdGpuEvidenceStatus"])}.</p>
-      <p>SERS GPU benchmark: {html.escape(payload["sersGpuTrainingBenchmarkStatus"])}. CPU/GPU speedup: pending.</p>
-      <p>No specific GPU model is claimed. Deterministic rules remain authoritative.</p>
+      <p>SERS GPU benchmark: {html.escape(payload["sersGpuTrainingBenchmarkStatus"])}. Synthetic CPU/GPU speedup: {html.escape(speedup)}.</p>
+      <p>No real-world, production, compliance, specific GPU model, or accuracy-improvement claim is made.</p>
       <div class="toolbar">
         <a class="button" href="/amd-acceleration">AMD Evidence</a>
         <a class="button" href="/gpu-benchmark-plan">GPU Benchmark Plan</a>
@@ -239,9 +314,17 @@ def system_status_with_amd_json() -> dict[str, Any]:
         "amdClaimsAllowed": amd["amdClaimsAllowed"],
         "amdClaimsScope": amd["amdClaimsScope"],
         "specificGpuModelClaimed": False,
-        "sersGpuTrainingBenchmarkStatus": amd["sersGpuTrainingBenchmarkStatus"]
+        "sersGpuTrainingBenchmarkStatus": amd["sersGpuTrainingBenchmarkStatus"],
+        "speedupRatio": amd["speedupRatio"],
+        "metricsClaimScope": amd["metricsClaimScope"],
     })
     return status
+
+
+def validation_evidence_with_amd_json() -> dict[str, Any]:
+    payload = validation_evidence_json()
+    payload["amdAccelerationEvidence"] = amd_acceleration_json()
+    return payload
 
 
 class AmdDashboardHandler(BaseDashboardHandler):
@@ -269,6 +352,9 @@ class AmdDashboardHandler(BaseDashboardHandler):
         if path == "/system-status.json":
             self.respond_json(system_status_with_amd_json())
             return
+        if path == "/validation-evidence.json":
+            self.respond_json(validation_evidence_with_amd_json())
+            return
 
         super().do_GET()
 
@@ -278,9 +364,15 @@ def self_check() -> None:
     assert amd["amdGpuVerified"] is True, "expected committed AMD GPU evidence artifact"
     assert amd["specificGpuModelClaimed"] is False
     assert amd["sersGpuTrainingBenchmarkStatus"] in ("pending", "complete")
+    if amd["amdBenchmarkAvailable"]:
+        assert amd["speedupRatio"] is not None
+        assert amd["cpuTrainSeconds"] is not None
+        assert amd["gpuTrainSeconds"] is not None
+        assert "SERS GPU training completed" not in amd["notClaimed"]
+        assert "CPU/GPU speedup proven" not in amd["notClaimed"]
     assert "AMD GPU Acceleration Evidence" in render_amd_acceleration()
-    assert "No specific GPU model" in render_amd_acceleration()
-    assert "No training or speedup claim" in render_gpu_benchmark_plan()
+    assert "No real-world validation" in render_amd_acceleration()
+    assert "Synthetic SERS GPU benchmark" in render_amd_acceleration()
 
 
 def main() -> None:
@@ -302,4 +394,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
