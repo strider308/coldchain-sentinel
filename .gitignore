@@ -1,0 +1,11 @@
+
+# Local code graph / agent index artifacts
+.codegraph/
+.gortex/
+.repograph/
+
+# Local tooling outputs
+artifacts/tooling/
+src/__pycache__/
+**/__pycache__/
+*.pyc
