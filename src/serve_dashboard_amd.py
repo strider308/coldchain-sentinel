@@ -243,6 +243,7 @@ def render_amd_acceleration() -> str:
         <a class="button" href="/amd-acceleration.json">AMD JSON</a>
         <a class="button" href="/gpu-benchmark-plan">GPU Benchmark Plan</a>
         <a class="button" href="/gpu-research-lab">GPU Research Lab</a>
+        <a class="button" href="/fireworks-advisory">Fireworks Advisory</a>
         <a class="button" href="/model-benchmark">Model Benchmark</a>
         <a class="button" href="/sers-model-card">SERS Model Card</a>
       </div>
@@ -317,6 +318,7 @@ def command_center_with_amd_json() -> dict[str, Any]:
     payload.setdefault("routeMap", {})["amdAcceleration"] = "/amd-acceleration"
     payload.setdefault("routeMap", {})["gpuBenchmarkPlan"] = "/gpu-benchmark-plan"
     payload.setdefault("routeMap", {})["gpuResearchLab"] = "/gpu-research-lab"
+    payload.setdefault("routeMap", {})["fireworksAdvisory"] = "/fireworks-advisory"
     return payload
 
 
@@ -333,6 +335,7 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/amd-acceleration">AMD Evidence</a>
         <a class="button" href="/gpu-benchmark-plan">GPU Benchmark Plan</a>
         <a class="button" href="/gpu-research-lab">GPU Research Lab</a>
+        <a class="button" href="/fireworks-advisory">Fireworks Advisory</a>
       </div>
     </section>
 """
@@ -364,6 +367,62 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 12 route wiring - Fireworks advisory explanation layer
+        phase12_path = self.path.split("?", 1)[0]
+        if phase12_path in (
+            "/fireworks-advisory",
+            "/fireworks-advisory.json",
+            "/fireworks-model-card",
+            "/fireworks-model-card.json",
+        ) or (
+            phase12_path.startswith("/cases/") and phase12_path.endswith("/fireworks-advisory.json")
+        ):
+            import json as phase12_json
+            from fireworks_advisory_v2 import (
+                get_case_fireworks_advisory_payload,
+                get_fireworks_advisory_payload,
+                get_fireworks_model_card_payload,
+                render_fireworks_advisory_html,
+                render_fireworks_model_card_html,
+            )
+
+            try:
+                if phase12_path == "/fireworks-advisory":
+                    phase12_body = render_fireworks_advisory_html()
+                    phase12_type = "text/html; charset=utf-8"
+                elif phase12_path == "/fireworks-advisory.json":
+                    phase12_body = phase12_json.dumps(get_fireworks_advisory_payload(), indent=2, sort_keys=True)
+                    phase12_type = "application/json; charset=utf-8"
+                elif phase12_path == "/fireworks-model-card":
+                    phase12_body = render_fireworks_model_card_html()
+                    phase12_type = "text/html; charset=utf-8"
+                elif phase12_path == "/fireworks-model-card.json":
+                    phase12_body = phase12_json.dumps(get_fireworks_model_card_payload(), indent=2, sort_keys=True)
+                    phase12_type = "application/json; charset=utf-8"
+                else:
+                    phase12_parts = [part for part in phase12_path.split("/") if part]
+                    phase12_case_id = phase12_parts[1]
+                    phase12_body = phase12_json.dumps(
+                        get_case_fireworks_advisory_payload(phase12_case_id),
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    phase12_type = "application/json; charset=utf-8"
+            except KeyError:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(phase12_json.dumps({"error": "unknown synthetic advisory case"}).encode("utf-8"))
+                return
+
+            self.send_response(200)
+            self.send_header("Content-Type", phase12_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase12_body.encode("utf-8"))
+            return
+
         # Phase 11 route wiring - GPU synthetic research lab
         phase11_path = self.path.split("?", 1)[0]
         if phase11_path in (
@@ -724,6 +783,23 @@ def self_check() -> None:
     assert gpu_lab["runtimeExternalServiceRequired"] is False
     assert gpu_lab["safetyBoundaries"]["autonomousActionsAllowed"] is False
     assert "No runtime GPU dependency" in render_gpu_research_lab_html()
+    from fireworks_advisory_v2 import (
+        get_case_fireworks_advisory_payload,
+        get_fireworks_advisory_payload,
+        get_fireworks_model_card_payload,
+        render_fireworks_advisory_html,
+    )
+    fireworks_catalog = get_fireworks_advisory_payload()
+    fireworks_case = get_case_fireworks_advisory_payload("no-excursion-control")
+    fireworks_card = get_fireworks_model_card_payload()
+    assert fireworks_catalog["phase"] == "Phase 12 - Fireworks Advisory Explanation Layer"
+    assert fireworks_catalog["syntheticOnly"] is True
+    assert fireworks_catalog["advisoryOnly"] is True
+    assert fireworks_catalog["runtimeExternalServiceRequired"] is False
+    assert fireworks_case["provider"]["displayedAdvisorySource"] in ("deterministic_fallback", "fireworks_safety_gated_json")
+    assert fireworks_case["context"]["autonomousActionsAllowed"] is False
+    assert fireworks_card["runtimeExternalServiceRequired"] is False
+    assert "Fallback always available" in render_fireworks_advisory_html()
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
