@@ -28,6 +28,12 @@ from serve_dashboard import (
     validation_evidence_json,
 )
 
+from consensus_v2 import (
+    consensus_json,
+    consensus_report_json,
+    render_consensus_page,
+)
+
 from data_quality_v2 import (
     data_quality_json,
     quality_events_json,
@@ -369,6 +375,21 @@ class AmdDashboardHandler(BaseDashboardHandler):
         if path == "/data-quality.json":
             self.respond_json(data_quality_json())
             return
+        if path == "/consensus":
+            self.respond_text(render_consensus_page())
+            return
+        if path == "/consensus.json":
+            self.respond_json(consensus_json())
+            return
+        if path.startswith("/cases/"):
+            parts = [part for part in path.split("/") if part]
+            if len(parts) == 3 and parts[2] == "consensus-report.json":
+                selected = parts[1]
+                try:
+                    self.respond_json(consensus_report_json(selected))
+                except KeyError:
+                    self.respond_text(f"Case not found: {html.escape(selected)}", 404)
+                return
         if path.startswith("/cases/"):
             parts = [part for part in path.split("/") if part]
             if len(parts) == 3 and parts[2] in ("quality-events.json", "rejected-readings.json"):
@@ -461,6 +482,16 @@ def self_check() -> None:
     rejected = rejected_readings_json("blocked-unresolved-pallet", 0, 100)
     assert rejected["totalRejectedReadings"] >= 1
     assert "Sentinel Data Trust Pipeline" in render_data_quality_page()
+    consensus = consensus_json()
+    assert consensus["engineAcronym"] == "ZCE"
+    assert "sensorTrustScore" in consensus["factors"]
+    zce_report = consensus_report_json("blocked-unresolved-pallet")
+    assert zce_report["engineAcronym"] == "ZCE"
+    assert zce_report["summary"]["zoneCount"] >= 1
+    assert zce_report["summary"]["sensorCount"] >= 1
+    assert zce_report["zoneConsensus"][0]["zoneConsensusScore"] >= 0
+    assert zce_report["sensorTrust"][0]["sensorTrustScore"] >= 0
+    assert "Zone Consensus Engine" in render_consensus_page()
 
 
 def main() -> None:
