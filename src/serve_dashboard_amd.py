@@ -31,6 +31,7 @@ from serve_dashboard import (
 from sers_v2 import (
     render_sers_page,
     risk_timeline_json,
+    sers_case_json,
     sers_json,
     sers_model_card_json,
 )
@@ -528,6 +529,13 @@ def self_check() -> None:
     assert sers_card["advisoryOnly"] is True
     assert sers_card["autonomousActionsAllowed"] is False
     assert "automatic release" in sers_card["notIntendedUse"]
+    control_sers = sers_case_json("no-excursion-control")
+    control_mapping = next(
+        item for item in control_sers["factorsThatMatterMost"]
+        if item["featureId"] == "unresolvedMappingRisk"
+    )
+    assert control_mapping["contributionPoints"] == 0
+    assert control_sers["currentRisk"]["riskBand"] in ("LOW", "WATCH")
     assert "SERS v2 Advisory Risk Model" in render_sers_page()
 
 

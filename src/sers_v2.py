@@ -1,4 +1,4 @@
-﻿"""SERS v2 advisory risk model.
+"""SERS v2 advisory risk model.
 
 Synthetic-only proprietary-style risk scoring layer for ColdChain Sentinel.
 
@@ -141,6 +141,28 @@ def _case_text(case_id: str) -> str:
     return " ".join(values).upper()
 
 
+def _case_has_exact_blocker(case_id: str, blocker: str) -> bool:
+    """Return True only when the exact blocker code is present.
+
+    This avoids false positives from broad words like UNRESOLVED in labels,
+    descriptions, route names, or explanatory text.
+    """
+
+    target = blocker.upper()
+    case = get_case(case_id)
+
+    def walk(value: Any) -> bool:
+        if isinstance(value, str):
+            return value.upper() == target
+        if isinstance(value, list):
+            return any(walk(item) for item in value)
+        if isinstance(value, dict):
+            return any(walk(item) for item in value.values())
+        return False
+
+    return walk(case)
+
+
 def _event_counts(case_id: str) -> dict[str, int]:
     counts: dict[str, int] = defaultdict(int)
     for event in quality_events_json(case_id)["events"]:
@@ -160,8 +182,8 @@ def feature_contributions_json(case_id: str) -> dict[str, Any]:
     threshold_candidates = sum(1 for row in normalized if row.get("evidenceType") == "TEMPERATURE_EXCURSION_CANDIDATE")
     unmapped_candidates = sum(1 for row in normalized if row.get("evidenceCandidate") and row.get("palletId") is None)
 
-    has_temperature_blocker = "TEMPERATURE_EXCURSION_DETECTED" in case_text or threshold_candidates > 0
-    has_mapping_blocker = "UNRESOLVED_PALLET_MAPPING" in case_text or "UNRESOLVED" in case_text or unmapped_candidates > 0
+    has_temperature_blocker = _case_has_exact_blocker(case_id, "TEMPERATURE_EXCURSION_DETECTED") or threshold_candidates > 0
+    has_mapping_blocker = _case_has_exact_blocker(case_id, "UNRESOLVED_PALLET_MAPPING") or unmapped_candidates > 0
     ignored_single_sensor_spikes = int(summary.get("ignoredSingleSensorSpikeCount", 0))
     best_zone_score = float(summary.get("bestZoneConsensusScore", 0.0))
     lowest_sensor_trust = float(summary.get("lowestSensorTrustScore", 100.0))
@@ -289,7 +311,9 @@ def risk_timeline_json(case_id: str) -> dict[str, Any]:
     normalized = normalized_sensor_window_json(case_id, 0, 10_000)["readings"]
     contribution_payload = feature_contributions_json(case_id)
     case_text = _case_text(case_id)
-    unresolved_mapping = "UNRESOLVED_PALLET_MAPPING" in case_text or "UNRESOLVED" in case_text
+    unresolved_mapping = _case_has_exact_blocker(case_id, "UNRESOLVED_PALLET_MAPPING") or any(
+        row.get("evidenceCandidate") and row.get("palletId") is None for row in normalized
+    )
 
     accepted = [row for row in normalized if row["normalizationStatus"] == "ACCEPTED"]
     bucket_size = 24
