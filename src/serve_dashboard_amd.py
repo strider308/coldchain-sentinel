@@ -28,6 +28,14 @@ from serve_dashboard import (
     validation_evidence_json,
 )
 
+from data_quality_v2 import (
+    data_quality_json,
+    quality_events_json,
+    quality_report_json,
+    rejected_readings_json,
+    render_data_quality_page,
+)
+
 from sensor_data_model_v2 import (
     data_contract_v2_json,
     normalized_sensor_window_json,
@@ -355,6 +363,25 @@ class AmdDashboardHandler(BaseDashboardHandler):
         if path == "/data-contract.json":
             self.respond_json(data_contract_v2_json())
             return
+        if path == "/data-quality":
+            self.respond_text(render_data_quality_page())
+            return
+        if path == "/data-quality.json":
+            self.respond_json(data_quality_json())
+            return
+        if path.startswith("/cases/"):
+            parts = [part for part in path.split("/") if part]
+            if len(parts) == 3 and parts[2] in ("quality-events.json", "rejected-readings.json"):
+                selected = parts[1]
+                offset, limit = parse_window_query(parsed.query)
+                try:
+                    if parts[2] == "quality-events.json":
+                        self.respond_json(quality_events_json(selected))
+                    else:
+                        self.respond_json(rejected_readings_json(selected, offset, limit))
+                except KeyError:
+                    self.respond_text(f"Case not found: {html.escape(selected)}", 404)
+                return
         if path.startswith("/cases/"):
             parts = [part for part in path.split("/") if part]
             if len(parts) == 3 and parts[2] in ("raw-sensor-window.json", "normalized-sensor-window.json"):
@@ -422,6 +449,18 @@ def self_check() -> None:
     assert "No real-world validation" in render_amd_acceleration()
     assert "Synthetic SERS GPU benchmark" in render_amd_acceleration()
     assert "Data Contract v2" in render_data_contract_v2_page()
+    dq = data_quality_json()
+    assert dq["pipelineAcronym"] == "SDTP"
+    assert len(dq["stages"]) == 13
+    qreport = quality_report_json("blocked-unresolved-pallet")
+    assert qreport["metrics"]["acceptedReadings"] > 0
+    assert qreport["metrics"]["rejectedReadings"] >= 1
+    assert "cleanEvidencePercentage" in qreport["metrics"]
+    qevents = quality_events_json("blocked-unresolved-pallet")
+    assert qevents["totalEvents"] > 0
+    rejected = rejected_readings_json("blocked-unresolved-pallet", 0, 100)
+    assert rejected["totalRejectedReadings"] >= 1
+    assert "Sentinel Data Trust Pipeline" in render_data_quality_page()
 
 
 def main() -> None:
