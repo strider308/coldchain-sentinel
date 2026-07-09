@@ -242,6 +242,7 @@ def render_amd_acceleration() -> str:
       <div class="toolbar">
         <a class="button" href="/amd-acceleration.json">AMD JSON</a>
         <a class="button" href="/gpu-benchmark-plan">GPU Benchmark Plan</a>
+        <a class="button" href="/gpu-research-lab">GPU Research Lab</a>
         <a class="button" href="/model-benchmark">Model Benchmark</a>
         <a class="button" href="/sers-model-card">SERS Model Card</a>
       </div>
@@ -315,6 +316,7 @@ def command_center_with_amd_json() -> dict[str, Any]:
     }
     payload.setdefault("routeMap", {})["amdAcceleration"] = "/amd-acceleration"
     payload.setdefault("routeMap", {})["gpuBenchmarkPlan"] = "/gpu-benchmark-plan"
+    payload.setdefault("routeMap", {})["gpuResearchLab"] = "/gpu-research-lab"
     return payload
 
 
@@ -330,6 +332,7 @@ def render_command_center_with_amd() -> str:
       <div class="toolbar">
         <a class="button" href="/amd-acceleration">AMD Evidence</a>
         <a class="button" href="/gpu-benchmark-plan">GPU Benchmark Plan</a>
+        <a class="button" href="/gpu-research-lab">GPU Research Lab</a>
       </div>
     </section>
 """
@@ -361,6 +364,37 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 11 route wiring - GPU synthetic research lab
+        phase11_path = self.path.split("?", 1)[0]
+        if phase11_path in (
+            "/gpu-research-lab",
+            "/gpu-research-lab.json",
+            "/gpu-research-report",
+        ):
+            import json as phase11_json
+            from gpu_research_lab_v2 import (
+                get_gpu_research_lab_payload,
+                render_gpu_research_lab_html,
+                render_gpu_research_report_html,
+            )
+
+            if phase11_path == "/gpu-research-lab":
+                phase11_body = render_gpu_research_lab_html()
+                phase11_type = "text/html; charset=utf-8"
+            elif phase11_path == "/gpu-research-lab.json":
+                phase11_body = phase11_json.dumps(get_gpu_research_lab_payload(), indent=2, sort_keys=True)
+                phase11_type = "application/json; charset=utf-8"
+            else:
+                phase11_body = render_gpu_research_report_html()
+                phase11_type = "text/html; charset=utf-8"
+
+            self.send_response(200)
+            self.send_header("Content-Type", phase11_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase11_body.encode("utf-8"))
+            return
+
         # Phase 8-10 route wiring - review replay integration
         phase810_path = self.path.split("?", 1)[0]
         if phase810_path == "/review-workbench" or phase810_path == "/review-workbench.json" or (
@@ -681,6 +715,15 @@ def self_check() -> None:
         assert amd["gpuTrainSeconds"] is not None
         assert "SERS GPU training completed" not in amd["notClaimed"]
         assert "CPU/GPU speedup proven" not in amd["notClaimed"]
+    from gpu_research_lab_v2 import get_gpu_research_lab_payload, render_gpu_research_lab_html
+    gpu_lab = get_gpu_research_lab_payload()
+    assert gpu_lab["phase"] == "Phase 11 - GPU Synthetic Research Lab"
+    assert gpu_lab["syntheticOnly"] is True
+    assert gpu_lab["advisoryOnly"] is True
+    assert gpu_lab["runtimeGpuRequired"] is False
+    assert gpu_lab["runtimeExternalServiceRequired"] is False
+    assert gpu_lab["safetyBoundaries"]["autonomousActionsAllowed"] is False
+    assert "No runtime GPU dependency" in render_gpu_research_lab_html()
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
