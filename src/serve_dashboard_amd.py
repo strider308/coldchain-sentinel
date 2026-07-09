@@ -28,6 +28,13 @@ from serve_dashboard import (
     validation_evidence_json,
 )
 
+from sers_v2 import (
+    render_sers_page,
+    risk_timeline_json,
+    sers_json,
+    sers_model_card_json,
+)
+
 from consensus_v2 import (
     consensus_json,
     consensus_report_json,
@@ -381,6 +388,24 @@ class AmdDashboardHandler(BaseDashboardHandler):
         if path == "/consensus.json":
             self.respond_json(consensus_json())
             return
+        if path == "/sers":
+            self.respond_text(render_sers_page())
+            return
+        if path == "/sers.json":
+            self.respond_json(sers_json())
+            return
+        if path.startswith("/cases/"):
+            parts = [part for part in path.split("/") if part]
+            if len(parts) == 3 and parts[2] in ("risk-timeline.json", "sers-model-card.json"):
+                selected = parts[1]
+                try:
+                    if parts[2] == "risk-timeline.json":
+                        self.respond_json(risk_timeline_json(selected))
+                    else:
+                        self.respond_json(sers_model_card_json(selected))
+                except KeyError:
+                    self.respond_text(f"Case not found: {html.escape(selected)}", 404)
+                return
         if path.startswith("/cases/"):
             parts = [part for part in path.split("/") if part]
             if len(parts) == 3 and parts[2] == "consensus-report.json":
@@ -492,6 +517,18 @@ def self_check() -> None:
     assert zce_report["zoneConsensus"][0]["zoneConsensusScore"] >= 0
     assert zce_report["sensorTrust"][0]["sensorTrustScore"] >= 0
     assert "Zone Consensus Engine" in render_consensus_page()
+    sers_payload = sers_json()
+    assert sers_payload["modelVersion"] == "sers-v2"
+    assert sers_payload["status"] == "ADVISORY_ONLY"
+    assert "CRITICAL" in sers_payload["riskBands"]
+    sers_timeline = risk_timeline_json("blocked-unresolved-pallet")
+    assert sers_timeline["currentRisk"]["riskBand"] in ("LOW", "WATCH", "REVIEW", "CRITICAL")
+    assert len(sers_timeline["riskTimeline"]) > 0
+    sers_card = sers_model_card_json("blocked-unresolved-pallet")
+    assert sers_card["advisoryOnly"] is True
+    assert sers_card["autonomousActionsAllowed"] is False
+    assert "automatic release" in sers_card["notIntendedUse"]
+    assert "SERS v2 Advisory Risk Model" in render_sers_page()
 
 
 def main() -> None:
