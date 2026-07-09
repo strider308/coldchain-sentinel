@@ -103,7 +103,7 @@ def amd_acceleration_json() -> dict[str, Any]:
             "pharma/compliance validation",
             "specific AMD GPU model",
             "AMD improved SERS accuracy",
-            "autonomous release/quarantine/discard/reroute/customer notification",
+            "autonomous operational action or customer messaging",
         ]
     else:
         allowed_claim = (
@@ -319,6 +319,10 @@ def command_center_with_amd_json() -> dict[str, Any]:
     payload.setdefault("routeMap", {})["gpuBenchmarkPlan"] = "/gpu-benchmark-plan"
     payload.setdefault("routeMap", {})["gpuResearchLab"] = "/gpu-research-lab"
     payload.setdefault("routeMap", {})["fireworksAdvisory"] = "/fireworks-advisory"
+    payload.setdefault("routeMap", {})["demoConsole"] = "/demo-console"
+    payload.setdefault("routeMap", {})["judgeEvidence"] = "/judge-evidence"
+    payload.setdefault("routeMap", {})["finalValidation"] = "/final-validation"
+    payload.setdefault("routeMap", {})["validationPacket"] = "/validation-packet"
     return payload
 
 
@@ -336,6 +340,8 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/gpu-benchmark-plan">GPU Benchmark Plan</a>
         <a class="button" href="/gpu-research-lab">GPU Research Lab</a>
         <a class="button" href="/fireworks-advisory">Fireworks Advisory</a>
+        <a class="button" href="/demo-console">Demo Console</a>
+        <a class="button" href="/final-validation">Final Validation</a>
       </div>
     </section>
 """
@@ -367,6 +373,45 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 13/14 route wiring - demo evidence and validation packets
+        phase1314_path = self.path.split("?", 1)[0]
+        if phase1314_path in (
+            "/demo-console",
+            "/demo-console.json",
+            "/judge-evidence",
+            "/judge-evidence.json",
+            "/final-validation",
+            "/final-validation.json",
+            "/validation-packet",
+            "/validation-packet.json",
+        ):
+            import json as phase1314_json
+            from demo_console_v2 import get_demo_console_payload, render_demo_console_html
+            from final_validation_packet_v2 import (
+                get_final_validation_packet_payload,
+                render_final_validation_packet_html,
+            )
+
+            if phase1314_path in ("/demo-console", "/judge-evidence"):
+                phase1314_body = render_demo_console_html()
+                phase1314_type = "text/html; charset=utf-8"
+            elif phase1314_path in ("/demo-console.json", "/judge-evidence.json"):
+                phase1314_body = phase1314_json.dumps(get_demo_console_payload(), indent=2, sort_keys=True)
+                phase1314_type = "application/json; charset=utf-8"
+            elif phase1314_path in ("/final-validation", "/validation-packet"):
+                phase1314_body = render_final_validation_packet_html()
+                phase1314_type = "text/html; charset=utf-8"
+            else:
+                phase1314_body = phase1314_json.dumps(get_final_validation_packet_payload(), indent=2, sort_keys=True)
+                phase1314_type = "application/json; charset=utf-8"
+
+            self.send_response(200)
+            self.send_header("Content-Type", phase1314_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase1314_body.encode("utf-8"))
+            return
+
         # Phase 12 route wiring - Fireworks advisory explanation layer
         phase12_path = self.path.split("?", 1)[0]
         if phase12_path in (
@@ -800,6 +845,37 @@ def self_check() -> None:
     assert fireworks_case["context"]["autonomousActionsAllowed"] is False
     assert fireworks_card["runtimeExternalServiceRequired"] is False
     assert "Fallback always available" in render_fireworks_advisory_html()
+    from demo_console_v2 import get_demo_console_payload, render_demo_console_html
+    demo_console = get_demo_console_payload()
+    demo_html = render_demo_console_html()
+    assert demo_console["phase"] == "Phase 13 - Judge Demo Evidence Console"
+    assert demo_console["syntheticOnly"] is True
+    assert demo_console["advisoryOnly"] is True
+    assert demo_console["runtimeGpuRequired"] is False
+    assert demo_console["runtimeExternalServiceRequired"] is False
+    assert demo_console["deterministicRulesAuthoritative"] is True
+    assert "Synthetic-only" in demo_html
+    assert "Advisory-only" in demo_html
+    assert "Runtime GPU required: false" in demo_html
+    assert "Runtime external service required: false" in demo_html
+    from final_validation_packet_v2 import get_final_validation_packet_payload, render_final_validation_packet_html
+    validation_packet = get_final_validation_packet_payload()
+    validation_html = render_final_validation_packet_html()
+    assert validation_packet["phase"] == "Phase 14 - Final Validation Evidence Packet"
+    assert validation_packet["syntheticOnly"] is True
+    assert validation_packet["advisoryOnly"] is True
+    assert validation_packet["runtimeGpuRequired"] is False
+    assert validation_packet["runtimeExternalServiceRequired"] is False
+    assert validation_packet["deterministicRulesAuthoritative"] is True
+    assert validation_packet["productionValidated"] is False
+    assert validation_packet["pharmaValidated"] is False
+    assert validation_packet["realWorldValidated"] is False
+    assert validation_packet["complianceCertified"] is False
+    assert validation_packet["autonomousActionsAllowed"] is False
+    assert "Demo-ready evidence packet, not production validation" in validation_html
+    assert "Synthetic-only" in validation_html
+    assert "Runtime GPU required: false" in validation_html
+    assert "Runtime external service required: false" in validation_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
