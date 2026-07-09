@@ -277,7 +277,7 @@ def self_check() -> None:
     amd = amd_acceleration_json()
     assert amd["amdGpuVerified"] is True, "expected committed AMD GPU evidence artifact"
     assert amd["specificGpuModelClaimed"] is False
-    assert amd["sersGpuTrainingBenchmarkStatus"] == "pending"
+    assert amd["sersGpuTrainingBenchmarkStatus"] in ("pending", "complete")
     assert "AMD GPU Acceleration Evidence" in render_amd_acceleration()
     assert "No specific GPU model" in render_amd_acceleration()
     assert "No training or speedup claim" in render_gpu_benchmark_plan()
@@ -302,3 +302,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

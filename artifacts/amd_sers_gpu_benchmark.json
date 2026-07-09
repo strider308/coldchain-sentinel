@@ -1,0 +1,57 @@
+﻿{
+  "artifactType": "amd_sers_gpu_benchmark",
+  "benchmarkStatus": "AMD_GPU_SYNTHETIC_SERS_BENCHMARK_COMPLETE",
+  "gpuVerified": true,
+  "torchCudaAvailable": true,
+  "torchVersion": "2.9.1+gitff65f5b",
+  "pythonVersion": "3.10.12",
+  "deviceName": "",
+  "deviceNameNote": "Do not claim a specific GPU model if this value is empty.",
+  "trainingRows": 96000,
+  "testRows": 24000,
+  "featureCount": 10,
+  "epochs": 12,
+  "cpuResult": {
+    "device": "cpu",
+    "trainSeconds": 1.5362987518310547,
+    "accuracy": 0.7141666666666666,
+    "precision": 0.7034723588432028,
+    "recall": 0.9450905246464913,
+    "confusionMatrix": {
+      "truePositive": 14303,
+      "trueNegative": 2837,
+      "falsePositive": 6029,
+      "falseNegative": 831
+    }
+  },
+  "gpuResult": {
+    "device": "cuda",
+    "trainSeconds": 1.059145212173462,
+    "accuracy": 0.7064583333333333,
+    "precision": 0.68321630804077,
+    "recall": 0.996564028016387,
+    "confusionMatrix": {
+      "truePositive": 15082,
+      "trueNegative": 1873,
+      "falsePositive": 6993,
+      "falseNegative": 52
+    }
+  },
+  "speedupRatio": 1.4505081401240822,
+  "speedupClaimAllowed": true,
+  "metricsClaimScope": "synthetic benchmark only",
+  "syntheticOnly": true,
+  "realDataUsed": false,
+  "productionValidated": false,
+  "sersAdvisoryOnly": true,
+  "deterministicRulesAuthoritative": true,
+  "autonomousActionsAllowed": false,
+  "claimsNotAllowed": [
+    "real-world validation",
+    "production ML acceleration",
+    "pharma validation",
+    "specific GPU model if deviceName is empty",
+    "autonomous release/quarantine/discard/reroute/customer notification",
+    "SERS changes deterministic review facts"
+  ]
+}
