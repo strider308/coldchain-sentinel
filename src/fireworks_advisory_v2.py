@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
 DEFAULT_MODEL = "accounts/fireworks/routers/kimi-k2p6-turbo"
-TIMEOUT_SECONDS = 12
+TIMEOUT_SECONDS = 45
 PHASE = "Phase 12 - Fireworks Advisory Explanation Layer"
 STATUS = "SAFETY_GATED_OPTIONAL"
 
@@ -206,23 +206,74 @@ def _fallback_payload(context: dict[str, Any], reason: str, *, call_succeeded: b
 
 
 def _build_messages(context: dict[str, Any]) -> list[dict[str, str]]:
+    risk = context.get("currentRisk", {})
+    confidence = context.get("confidence", {})
+
+    factors: list[str] = []
+    for item in context.get("factorsThatMatterMost", [])[:3]:
+        if isinstance(item, dict):
+            label = str(item.get("label") or item.get("featureId") or "Synthetic advisory factor")
+            factors.append(label[:90])
+
+    compact_context = {
+        "caseId": context.get("caseId"),
+        "riskBand": risk.get("riskBand"),
+        "riskScore": risk.get("riskScore"),
+        "confidenceLabel": confidence.get("label") or confidence.get("confidenceLabel"),
+        "topFactors": factors,
+        "syntheticOnly": True,
+        "advisoryOnly": True,
+        "autonomousActionsAllowed": False,
+        "deterministicRulesAuthoritative": True,
+    }
+
     system = (
-        "You assist a human cold-chain reviewer. The deterministic SERS context is authoritative. "
-        "Return only JSON with keys summary, riskDrivers, evidenceToInspect, confidenceLimits, "
-        "humanReviewPrompt, safetyNote. Do not change risk, do not claim validation, and do not "
-        "recommend operational actions. Keep the explanation synthetic-only and advisory-only."
+        "Return exactly one valid minified JSON object. No markdown. No code fence. "
+        "Use exactly these keys: summary, riskDrivers, evidenceToInspect, confidenceLimits, "
+        "humanReviewPrompt, safetyNote. "
+        "summary, humanReviewPrompt, and safetyNote must be short strings under 140 characters. "
+        "riskDrivers, evidenceToInspect, and confidenceLimits must be arrays with 1 to 3 short strings. "
+        "Do not use these phrases: safe for distribution, approve shipment, release shipment, "
+        "autonomous release, autonomous quarantine, autonomous discard, autonomous reroute, "
+        "customer notification, compliance certified, pharma validated, real-world validated, production-ready. "
+        "Do not recommend operational action. Deterministic rules remain authoritative."
     )
+
+    user = {
+        "requiredJsonShape": {
+            "summary": "short string",
+            "riskDrivers": ["short string"],
+            "evidenceToInspect": ["short string"],
+            "confidenceLimits": ["short string"],
+            "humanReviewPrompt": "short string",
+            "safetyNote": "short string",
+        },
+        "safeExample": {
+            "summary": "Synthetic advisory evidence remains available for human review.",
+            "riskDrivers": ["Synthetic SERS factors should be inspected."],
+            "evidenceToInspect": ["Review synthetic sensor and consensus evidence."],
+            "confidenceLimits": ["Synthetic-only evidence cannot validate real operations."],
+            "humanReviewPrompt": "Document what evidence a reviewer would inspect next.",
+            "safetyNote": "Optional explanation only. Deterministic rules remain authoritative.",
+        },
+        "context": compact_context,
+    }
+
     return [
         {"role": "system", "content": system},
-        {"role": "user", "content": json.dumps(context, sort_keys=True)},
+        {"role": "user", "content": json.dumps(user, sort_keys=True)},
     ]
-
 
 def _call_fireworks(api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
     request = urllib.request.Request(
         FIREWORKS_URL,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "ColdChainSentinel/phase12 (+https://github.com/strider308/coldchain-sentinel)",
+        },
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
@@ -292,7 +343,7 @@ def get_case_fireworks_advisory_payload(
     request_payload = {
         "model": model,
         "messages": _build_messages(context),
-        "max_tokens": 420,
+        "max_tokens": 700,
         "temperature": 0.2,
         "response_format": {"type": "json_object"},
     }
