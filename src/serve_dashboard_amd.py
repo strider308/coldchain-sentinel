@@ -361,6 +361,52 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 6 route wiring - synthetic training lab endpoints
+        phase6_path = self.path.split("?", 1)[0]
+        if phase6_path in (
+            "/training-lab",
+            "/training-lab.json",
+            "/model-benchmark-v2",
+            "/model-benchmark-v2.json",
+            "/model-card",
+            "/model-card.json",
+        ):
+            import json as phase6_json
+            from training_lab_v2 import (
+                get_model_benchmark_v2_payload,
+                get_model_card_payload,
+                get_training_lab_payload,
+                render_model_benchmark_v2_html,
+                render_model_card_html,
+                render_training_lab_html,
+            )
+        
+            if phase6_path == "/training-lab":
+                phase6_body = render_training_lab_html()
+                phase6_content_type = "text/html; charset=utf-8"
+            elif phase6_path == "/training-lab.json":
+                phase6_body = phase6_json.dumps(get_training_lab_payload(), indent=2, sort_keys=True)
+                phase6_content_type = "application/json; charset=utf-8"
+            elif phase6_path == "/model-benchmark-v2":
+                phase6_body = render_model_benchmark_v2_html()
+                phase6_content_type = "text/html; charset=utf-8"
+            elif phase6_path == "/model-benchmark-v2.json":
+                phase6_body = phase6_json.dumps(get_model_benchmark_v2_payload(), indent=2, sort_keys=True)
+                phase6_content_type = "application/json; charset=utf-8"
+            elif phase6_path == "/model-card":
+                phase6_body = render_model_card_html()
+                phase6_content_type = "text/html; charset=utf-8"
+            else:
+                phase6_body = phase6_json.dumps(get_model_card_payload(), indent=2, sort_keys=True)
+                phase6_content_type = "application/json; charset=utf-8"
+        
+            self.send_response(200)
+            self.send_header("Content-Type", phase6_content_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase6_body.encode("utf-8"))
+            return
+
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
