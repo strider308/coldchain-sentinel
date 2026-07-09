@@ -361,6 +361,120 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 8-10 route wiring - review replay integration
+        phase810_path = self.path.split("?", 1)[0]
+        if phase810_path == "/review-workbench" or phase810_path == "/review-workbench.json" or (
+            phase810_path.startswith("/review-workbench/") and phase810_path.endswith(".json")
+        ):
+            import json as phase810_json
+            from human_review_workbench_v2 import (
+                get_review_packet_payload,
+                get_review_workbench_payload,
+                render_review_packet_html,
+                render_review_workbench_html,
+            )
+            try:
+                if phase810_path == "/review-workbench":
+                    phase810_body = render_review_workbench_html()
+                    phase810_type = "text/html; charset=utf-8"
+                elif phase810_path == "/review-workbench.json":
+                    phase810_body = phase810_json.dumps(get_review_workbench_payload(), indent=2, sort_keys=True)
+                    phase810_type = "application/json; charset=utf-8"
+                else:
+                    phase810_scenario_id = phase810_path.rsplit("/", 1)[-1][:-5]
+                    phase810_body = phase810_json.dumps(get_review_packet_payload(phase810_scenario_id), indent=2, sort_keys=True)
+                    phase810_type = "application/json; charset=utf-8"
+            except KeyError:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(phase810_json.dumps({"error": "unknown synthetic review packet"}).encode("utf-8"))
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", phase810_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase810_body.encode("utf-8"))
+            return
+
+        if phase810_path == "/incident-replay" or phase810_path == "/incident-replay.json" or (
+            phase810_path.startswith("/incident-replay/") and phase810_path.endswith(".json")
+        ):
+            import json as phase810_json
+            from incident_replay_v2 import (
+                get_incident_replay_catalog_payload,
+                get_incident_replay_payload,
+                render_incident_replay_catalog_html,
+                render_incident_replay_html,
+            )
+            try:
+                if phase810_path == "/incident-replay":
+                    phase810_body = render_incident_replay_catalog_html()
+                    phase810_type = "text/html; charset=utf-8"
+                elif phase810_path == "/incident-replay.json":
+                    phase810_body = phase810_json.dumps(get_incident_replay_catalog_payload(), indent=2, sort_keys=True)
+                    phase810_type = "application/json; charset=utf-8"
+                else:
+                    phase810_scenario_id = phase810_path.rsplit("/", 1)[-1][:-5]
+                    phase810_body = phase810_json.dumps(get_incident_replay_payload(phase810_scenario_id), indent=2, sort_keys=True)
+                    phase810_type = "application/json; charset=utf-8"
+            except KeyError:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(phase810_json.dumps({"error": "unknown synthetic replay"}).encode("utf-8"))
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", phase810_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase810_body.encode("utf-8"))
+            return
+
+        if phase810_path in (
+            "/integration-readiness",
+            "/integration-readiness.json",
+            "/integration-contract",
+            "/integration-contract.json",
+            "/integration-safety",
+            "/integration-safety.json",
+        ):
+            import json as phase810_json
+            from integration_readiness_v2 import (
+                get_integration_contract_payload,
+                get_integration_readiness_payload,
+                get_integration_safety_payload,
+                render_integration_contract_html,
+                render_integration_readiness_html,
+                render_integration_safety_html,
+            )
+            if phase810_path == "/integration-readiness":
+                phase810_body = render_integration_readiness_html()
+                phase810_type = "text/html; charset=utf-8"
+            elif phase810_path == "/integration-readiness.json":
+                phase810_body = phase810_json.dumps(get_integration_readiness_payload(), indent=2, sort_keys=True)
+                phase810_type = "application/json; charset=utf-8"
+            elif phase810_path == "/integration-contract":
+                phase810_body = render_integration_contract_html()
+                phase810_type = "text/html; charset=utf-8"
+            elif phase810_path == "/integration-contract.json":
+                phase810_body = phase810_json.dumps(get_integration_contract_payload(), indent=2, sort_keys=True)
+                phase810_type = "application/json; charset=utf-8"
+            elif phase810_path == "/integration-safety":
+                phase810_body = render_integration_safety_html()
+                phase810_type = "text/html; charset=utf-8"
+            else:
+                phase810_body = phase810_json.dumps(get_integration_safety_payload(), indent=2, sort_keys=True)
+                phase810_type = "application/json; charset=utf-8"
+            self.send_response(200)
+            self.send_header("Content-Type", phase810_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase810_body.encode("utf-8"))
+            return
+
         # Phase 7 route wiring - synthetic scenario simulator
         phase7_path = self.path.split("?", 1)[0]
         if phase7_path == "/scenario-lab" or phase7_path == "/scenario-lab.json" or (
