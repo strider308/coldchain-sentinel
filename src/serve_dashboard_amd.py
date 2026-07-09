@@ -361,6 +361,45 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 7 route wiring - synthetic scenario simulator
+        phase7_path = self.path.split("?", 1)[0]
+        if phase7_path == "/scenario-lab" or phase7_path == "/scenario-lab.json" or (
+            phase7_path.startswith("/scenario-lab/") and phase7_path.endswith(".json")
+        ):
+            import json as phase7_json
+            from scenario_lab_v2 import (
+                get_scenario_lab_payload,
+                get_scenario_payload,
+                render_scenario_html,
+                render_scenario_lab_html,
+            )
+        
+            try:
+                if phase7_path == "/scenario-lab":
+                    phase7_body = render_scenario_lab_html()
+                    phase7_content_type = "text/html; charset=utf-8"
+                elif phase7_path == "/scenario-lab.json":
+                    phase7_body = phase7_json.dumps(get_scenario_lab_payload(), indent=2, sort_keys=True)
+                    phase7_content_type = "application/json; charset=utf-8"
+                else:
+                    phase7_scenario_id = phase7_path.rsplit("/", 1)[-1][:-5]
+                    phase7_body = phase7_json.dumps(get_scenario_payload(phase7_scenario_id), indent=2, sort_keys=True)
+                    phase7_content_type = "application/json; charset=utf-8"
+            except KeyError:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(phase7_json.dumps({"error": "unknown synthetic scenario"}).encode("utf-8"))
+                return
+        
+            self.send_response(200)
+            self.send_header("Content-Type", phase7_content_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase7_body.encode("utf-8"))
+            return
+
         # Phase 6 route wiring - synthetic training lab endpoints
         phase6_path = self.path.split("?", 1)[0]
         if phase6_path in (
