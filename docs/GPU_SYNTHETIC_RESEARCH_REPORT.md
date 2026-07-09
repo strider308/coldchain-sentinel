@@ -52,3 +52,12 @@ The live app must remain CPU-compatible and must not require GPU libraries or no
 ## Requirements Before Real Deployment
 
 Real deployment would require authorized real data access, sensor calibration studies, cold-chain domain review, a regulated validation plan, security and privacy review, and approved human operating procedures.
+
+
+## Exported Artifact
+
+The GPU/Jupyter notebook exported `artifacts/gpu_synthetic_research_summary.json`.
+
+The artifact is safe to commit because it contains only sanitized synthetic benchmark metadata and summary results. It does not contain raw synthetic datasets, notebook outputs, API keys, secrets, real customer data, or real shipment data.
+
+The live app may read this artifact to show that GPU-backed synthetic research evidence is available, while still reporting `runtimeGpuRequired: false`.

@@ -1,16 +1,39 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 import html
 import json
 from typing import Any
 
 PHASE = "Phase 11 - GPU Synthetic Research Lab"
 STATUS = "FOUNDATION_READY"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+GPU_RESEARCH_ARTIFACT = REPO_ROOT / "artifacts" / "gpu_synthetic_research_summary.json"
+
+
+
+def _load_gpu_research_artifact() -> dict[str, Any] | None:
+    if not GPU_RESEARCH_ARTIFACT.exists():
+        return None
+    try:
+        artifact = json.loads(GPU_RESEARCH_ARTIFACT.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(artifact, dict):
+        return None
+    if artifact.get("syntheticOnly") is not True:
+        return None
+    if artifact.get("advisoryOnly") is not True:
+        return None
+    if artifact.get("runtimeGpuRequired") is not False:
+        return None
+    return artifact
 
 
 @lru_cache(maxsize=1)
 def get_gpu_research_lab_payload() -> dict[str, Any]:
+    artifact = _load_gpu_research_artifact()
     return {
         "phase": PHASE,
         "status": STATUS,
@@ -18,6 +41,9 @@ def get_gpu_research_lab_payload() -> dict[str, Any]:
         "advisoryOnly": True,
         "runtimeGpuRequired": False,
         "runtimeExternalServiceRequired": False,
+        "artifactAvailable": artifact is not None,
+        "artifactPath": "artifacts/gpu_synthetic_research_summary.json",
+        "artifactSummary": artifact,
         "gpuWorkflow": {
             "environment": "Jupyter notebooks with GPU access",
             "purpose": "accelerate synthetic cold-chain benchmark experimentation",
@@ -175,6 +201,7 @@ def render_gpu_research_lab_html() -> str:
     <span class="badge">Synthetic-only</span>
     <span class="badge">Advisory-only</span>
     <span class="badge">No runtime GPU dependency</span>
+    <span class="badge">GPU notebook artifact: {html.escape("available" if payload["artifactAvailable"] else "pending")}</span>
     <span class="badge">Deterministic rules authoritative</span>
   </div>
 

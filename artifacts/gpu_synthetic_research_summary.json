@@ -1,0 +1,77 @@
+{
+  "advisoryOnly": true,
+  "artifactName": "gpu_synthetic_research_summary",
+  "autonomousActionsAllowed": false,
+  "benchmark": {
+    "advisoryOnly": true,
+    "benchmarkType": "synthetic tensor training loop",
+    "claimScope": "CPU/GPU timing comparison on synthetic data only",
+    "cpuResult": {
+      "accuracy": 1.0,
+      "device": "cpu",
+      "epochs": 80,
+      "finalLoss": 0.01619,
+      "trainSeconds": 0.5266
+    },
+    "gpuAvailable": true,
+    "gpuResult": {
+      "accuracy": 1.0,
+      "device": "cuda",
+      "epochs": 80,
+      "finalLoss": 0.025498,
+      "trainSeconds": 0.9895
+    },
+    "speedupRatio": 0.5322,
+    "status": "COMPLETE_CPU_GPU_SYNTHETIC_BENCHMARK",
+    "syntheticOnly": true
+  },
+  "dataset": {
+    "rawDataCommitted": false,
+    "readingsPerWindow": 12,
+    "scenarioFamilies": [
+      "no_excursion_control",
+      "slow_warming_excursion",
+      "door_left_open_warming",
+      "early_warning_slope",
+      "false_single_sensor_spike",
+      "unresolved_mapping_risk",
+      "dropout_weak_signal_noise"
+    ],
+    "seed": 260711,
+    "syntheticRows": 5400
+  },
+  "environment": {
+    "platform": "Linux-6.8.0-79-generic-x86_64-with-glibc2.35",
+    "pythonVersion": "3.10.12"
+  },
+  "generatedAtUtc": "2026-07-09T16:58:28.596900+00:00",
+  "phase": "Phase 11 - GPU Synthetic Research Lab",
+  "productionUseAllowed": false,
+  "realCustomerDataUsed": false,
+  "realShipmentDataUsed": false,
+  "runtimeGpuRequired": false,
+  "safetyBoundaries": {
+    "deterministicRulesAuthoritative": true,
+    "fireworksRequired": false,
+    "liveAppRequiresGpu": false,
+    "notClaimed": [
+      "production operation readiness",
+      "pharma validation",
+      "real-world validation",
+      "compliance certification",
+      "release/quarantine/discard/reroute decisions",
+      "customer messaging decisions",
+      "specific GPU model advantage unless explicitly verified"
+    ],
+    "sersAdvisoryOnly": true
+  },
+  "syntheticOnly": true,
+  "torch": {
+    "available": true,
+    "cudaAvailable": true,
+    "device": "cuda",
+    "deviceCount": 1,
+    "deviceName": "",
+    "version": "2.9.1+gitff65f5b"
+  }
+}

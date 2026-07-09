@@ -29,6 +29,17 @@ class GpuResearchLabV2Tests(unittest.TestCase):
         self.assertIn("safetyBoundaries", payload)
         self.assertIn("routeLinks", payload)
 
+
+    def test_artifact_ingestion_when_summary_exists(self):
+        payload = get_gpu_research_lab_payload()
+
+        self.assertTrue(payload["artifactAvailable"])
+        self.assertEqual(payload["artifactPath"], "artifacts/gpu_synthetic_research_summary.json")
+        self.assertIsInstance(payload["artifactSummary"], dict)
+        self.assertTrue(payload["artifactSummary"]["syntheticOnly"])
+        self.assertTrue(payload["artifactSummary"]["advisoryOnly"])
+        self.assertFalse(payload["artifactSummary"]["runtimeGpuRequired"])
+
     def test_runtime_boundary_is_dependency_free(self):
         payload = get_gpu_research_lab_payload()
 
