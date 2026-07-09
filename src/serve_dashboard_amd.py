@@ -1,4 +1,4 @@
-﻿"""AMD evidence route wrapper for ColdChain Sentinel.
+"""AMD evidence route wrapper for ColdChain Sentinel.
 
 This module extends the existing stdlib dashboard without changing deterministic
 review logic. It surfaces sanitized AMD GPU notebook evidence and, when present,
@@ -12,7 +12,7 @@ import html
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from http.server import ThreadingHTTPServer
 
 from serve_dashboard import (
@@ -26,6 +26,16 @@ from serve_dashboard import (
     render_command_center,
     system_status_json,
     validation_evidence_json,
+)
+
+from sensor_data_model_v2 import (
+    data_contract_v2_json,
+    normalized_sensor_window_json,
+    parse_window_query,
+    raw_schema_json,
+    raw_sensor_window_json,
+    render_data_contract_v2_page,
+    render_raw_schema_page,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -329,7 +339,35 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
+
+        if path == "/raw-schema":
+            self.respond_text(render_raw_schema_page())
+            return
+        if path == "/raw-schema.json":
+            self.respond_json(raw_schema_json())
+            return
+        if path == "/data-contract":
+            self.respond_text(render_data_contract_v2_page())
+            return
+        if path == "/data-contract.json":
+            self.respond_json(data_contract_v2_json())
+            return
+        if path.startswith("/cases/"):
+            parts = [part for part in path.split("/") if part]
+            if len(parts) == 3 and parts[2] in ("raw-sensor-window.json", "normalized-sensor-window.json"):
+                selected = parts[1]
+                offset, limit = parse_window_query(parsed.query)
+                try:
+                    if parts[2] == "raw-sensor-window.json":
+                        self.respond_json(raw_sensor_window_json(selected, offset, limit))
+                    else:
+                        self.respond_json(normalized_sensor_window_json(selected, offset, limit))
+                except KeyError:
+                    self.respond_text(f"Case not found: {html.escape(selected)}", 404)
+                return
 
         if path == "/amd-acceleration":
             self.respond_text(render_amd_acceleration())
@@ -370,9 +408,20 @@ def self_check() -> None:
         assert amd["gpuTrainSeconds"] is not None
         assert "SERS GPU training completed" not in amd["notClaimed"]
         assert "CPU/GPU speedup proven" not in amd["notClaimed"]
+    schema = raw_schema_json()
+    assert schema["schemaVersion"] == "raw-sensor-reading-v2"
+    assert "timestampUtc" in schema["acceptedFields"]
+    assert "ingestionDelaySeconds" in schema["acceptedFields"]
+    raw_window = raw_sensor_window_json("blocked-unresolved-pallet", 0, 10)
+    normalized_window = normalized_sensor_window_json("blocked-unresolved-pallet", 0, 10)
+    assert raw_window["returnedReadings"] == 10
+    assert normalized_window["returnedReadings"] == 10
+    assert normalized_window["schemaVersion"] == "normalized-sensor-reading-v2"
+    assert "whatGetsNormalized" in data_contract_v2_json()
     assert "AMD GPU Acceleration Evidence" in render_amd_acceleration()
     assert "No real-world validation" in render_amd_acceleration()
     assert "Synthetic SERS GPU benchmark" in render_amd_acceleration()
+    assert "Data Contract v2" in render_data_contract_v2_page()
 
 
 def main() -> None:
