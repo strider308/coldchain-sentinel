@@ -325,6 +325,8 @@ def command_center_with_amd_json() -> dict[str, Any]:
     payload.setdefault("routeMap", {})["validationPacket"] = "/validation-packet"
     payload.setdefault("routeMap", {})["integrationSandbox"] = "/integration-sandbox"
     payload.setdefault("routeMap", {})["auditLedger"] = "/audit-ledger"
+    payload.setdefault("routeMap", {})["reviewerWorkspace"] = "/reviewer-workspace"
+    payload.setdefault("routeMap", {})["fireworksCoverage"] = "/fireworks-coverage"
     return payload
 
 
@@ -346,6 +348,8 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/final-validation">Final Validation</a>
         <a class="button" href="/integration-sandbox">Integration Sandbox</a>
         <a class="button" href="/audit-ledger">Audit Ledger</a>
+        <a class="button" href="/reviewer-workspace">Reviewer Workspace</a>
+        <a class="button" href="/fireworks-coverage">Fireworks Coverage</a>
       </div>
     </section>
 """
@@ -377,6 +381,56 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 17/18 route wiring - static reviewer workflow and advisory coverage
+        phase1718_path = self.path.split("?", 1)[0]
+        if phase1718_path in (
+            "/reviewer-workspace",
+            "/reviewer-workspace.json",
+            "/fireworks-coverage",
+            "/fireworks-coverage.json",
+        ) or (phase1718_path.startswith("/reviewer-workspace/") and phase1718_path.endswith(".json")):
+            import json as phase1718_json
+            from fireworks_coverage_v2 import get_fireworks_coverage_payload, render_fireworks_coverage_html
+            from reviewer_workspace_v3 import (
+                get_case_reviewer_workspace_payload,
+                get_reviewer_workspace_payload,
+                render_reviewer_workspace_html,
+            )
+
+            if phase1718_path == "/reviewer-workspace":
+                phase1718_body = render_reviewer_workspace_html()
+                phase1718_type = "text/html; charset=utf-8"
+            elif phase1718_path == "/reviewer-workspace.json":
+                phase1718_body = phase1718_json.dumps(get_reviewer_workspace_payload(), indent=2, sort_keys=True)
+                phase1718_type = "application/json; charset=utf-8"
+            elif phase1718_path == "/fireworks-coverage":
+                phase1718_body = render_fireworks_coverage_html()
+                phase1718_type = "text/html; charset=utf-8"
+            elif phase1718_path == "/fireworks-coverage.json":
+                phase1718_body = phase1718_json.dumps(get_fireworks_coverage_payload(), indent=2, sort_keys=True)
+                phase1718_type = "application/json; charset=utf-8"
+            else:
+                phase1718_case_id = phase1718_path.rsplit("/", 1)[-1][:-5]
+                try:
+                    phase1718_body = phase1718_json.dumps(
+                        get_case_reviewer_workspace_payload(phase1718_case_id), indent=2, sort_keys=True
+                    )
+                except KeyError:
+                    self.send_response(404)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(phase1718_json.dumps({"error": "unknown synthetic reviewer case"}).encode("utf-8"))
+                    return
+                phase1718_type = "application/json; charset=utf-8"
+
+            self.send_response(200)
+            self.send_header("Content-Type", phase1718_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase1718_body.encode("utf-8"))
+            return
+
         # Phase 15/16 route wiring - static integration contracts and audit ledger
         phase1516_path = self.path.split("?", 1)[0]
         if phase1516_path in (
@@ -962,6 +1016,31 @@ def self_check() -> None:
     assert audit_ledger["autonomousActionsAllowed"] is False
     assert len(audit_ledger["ledgerSteps"]) == 8
     assert "audit-style synthetic evidence trail, not compliance certification" in audit_html.lower()
+    from reviewer_workspace_v3 import get_reviewer_workspace_payload, render_reviewer_workspace_html
+    reviewer_workspace = get_reviewer_workspace_payload()
+    reviewer_html = render_reviewer_workspace_html()
+    assert reviewer_workspace["phase"] == "Phase 17 - Reviewer Workspace v3"
+    assert reviewer_workspace["syntheticOnly"] is True
+    assert reviewer_workspace["advisoryOnly"] is True
+    assert reviewer_workspace["runtimeGpuRequired"] is False
+    assert reviewer_workspace["runtimeExternalServiceRequired"] is False
+    assert reviewer_workspace["deterministicRulesAuthoritative"] is True
+    assert reviewer_workspace["autonomousActionsAllowed"] is False
+    assert reviewer_workspace["databaseRequired"] is False
+    assert "Static synthetic reviewer workflow, no operational action." in reviewer_html
+    from fireworks_coverage_v2 import get_fireworks_coverage_payload, render_fireworks_coverage_html
+    fireworks_coverage = get_fireworks_coverage_payload()
+    coverage_html = render_fireworks_coverage_html()
+    assert fireworks_coverage["phase"] == "Phase 18 - Fireworks Multi-Case Advisory Coverage"
+    assert fireworks_coverage["syntheticOnly"] is True
+    assert fireworks_coverage["advisoryOnly"] is True
+    assert fireworks_coverage["runtimeGpuRequired"] is False
+    assert fireworks_coverage["runtimeExternalServiceRequired"] is False
+    assert fireworks_coverage["deterministicRulesAuthoritative"] is True
+    assert fireworks_coverage["autonomousActionsAllowed"] is False
+    assert fireworks_coverage["fireworksOptional"] is True
+    assert fireworks_coverage["bulkExternalCallsMade"] is False
+    assert "No bulk external calls" in coverage_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
