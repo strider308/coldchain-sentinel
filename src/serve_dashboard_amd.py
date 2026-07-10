@@ -323,6 +323,8 @@ def command_center_with_amd_json() -> dict[str, Any]:
     payload.setdefault("routeMap", {})["judgeEvidence"] = "/judge-evidence"
     payload.setdefault("routeMap", {})["finalValidation"] = "/final-validation"
     payload.setdefault("routeMap", {})["validationPacket"] = "/validation-packet"
+    payload.setdefault("routeMap", {})["integrationSandbox"] = "/integration-sandbox"
+    payload.setdefault("routeMap", {})["auditLedger"] = "/audit-ledger"
     return payload
 
 
@@ -342,6 +344,8 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/fireworks-advisory">Fireworks Advisory</a>
         <a class="button" href="/demo-console">Demo Console</a>
         <a class="button" href="/final-validation">Final Validation</a>
+        <a class="button" href="/integration-sandbox">Integration Sandbox</a>
+        <a class="button" href="/audit-ledger">Audit Ledger</a>
       </div>
     </section>
 """
@@ -373,6 +377,64 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 15/16 route wiring - static integration contracts and audit ledger
+        phase1516_path = self.path.split("?", 1)[0]
+        if phase1516_path in (
+            "/integration-sandbox",
+            "/integration-sandbox.json",
+            "/integration-sandbox/sample-request.json",
+            "/integration-sandbox/sample-response.json",
+            "/integration-sandbox/rejection-example.json",
+            "/audit-ledger",
+            "/audit-ledger.json",
+        ) or (phase1516_path.startswith("/cases/") and phase1516_path.endswith("/audit-ledger.json")):
+            import json as phase1516_json
+            from audit_ledger_v2 import get_audit_ledger_payload, get_case_audit_ledger_payload, render_audit_ledger_html
+            from integration_sandbox_v2 import (
+                get_integration_sandbox_payload,
+                get_rejection_example_payload,
+                get_sample_request_payload,
+                get_sample_response_payload,
+                render_integration_sandbox_html,
+            )
+
+            if phase1516_path == "/integration-sandbox":
+                phase1516_body = render_integration_sandbox_html()
+                phase1516_type = "text/html; charset=utf-8"
+            elif phase1516_path == "/integration-sandbox.json":
+                phase1516_body = phase1516_json.dumps(get_integration_sandbox_payload(), indent=2, sort_keys=True)
+                phase1516_type = "application/json; charset=utf-8"
+            elif phase1516_path == "/integration-sandbox/sample-request.json":
+                phase1516_body = phase1516_json.dumps(get_sample_request_payload(), indent=2, sort_keys=True)
+                phase1516_type = "application/json; charset=utf-8"
+            elif phase1516_path == "/integration-sandbox/sample-response.json":
+                phase1516_body = phase1516_json.dumps(get_sample_response_payload(), indent=2, sort_keys=True)
+                phase1516_type = "application/json; charset=utf-8"
+            elif phase1516_path == "/integration-sandbox/rejection-example.json":
+                phase1516_body = phase1516_json.dumps(get_rejection_example_payload(), indent=2, sort_keys=True)
+                phase1516_type = "application/json; charset=utf-8"
+            elif phase1516_path == "/audit-ledger":
+                phase1516_body = render_audit_ledger_html()
+                phase1516_type = "text/html; charset=utf-8"
+            elif phase1516_path == "/audit-ledger.json":
+                phase1516_body = phase1516_json.dumps(get_audit_ledger_payload(), indent=2, sort_keys=True)
+                phase1516_type = "application/json; charset=utf-8"
+            else:
+                phase1516_case_id = [part for part in phase1516_path.split("/") if part][1]
+                try:
+                    phase1516_body = phase1516_json.dumps(get_case_audit_ledger_payload(phase1516_case_id), indent=2, sort_keys=True)
+                except KeyError:
+                    super().do_GET()
+                    return
+                phase1516_type = "application/json; charset=utf-8"
+
+            self.send_response(200)
+            self.send_header("Content-Type", phase1516_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase1516_body.encode("utf-8"))
+            return
+
         # Phase 13/14 route wiring - demo evidence and validation packets
         phase1314_path = self.path.split("?", 1)[0]
         if phase1314_path in (
@@ -876,6 +938,30 @@ def self_check() -> None:
     assert "Synthetic-only" in validation_html
     assert "Runtime GPU required: false" in validation_html
     assert "Runtime external service required: false" in validation_html
+    from integration_sandbox_v2 import get_integration_sandbox_payload, render_integration_sandbox_html
+    integration_sandbox = get_integration_sandbox_payload()
+    integration_html = render_integration_sandbox_html()
+    assert integration_sandbox["phase"] == "Phase 15 - Integration Sandbox"
+    assert integration_sandbox["syntheticOnly"] is True
+    assert integration_sandbox["advisoryOnly"] is True
+    assert integration_sandbox["runtimeGpuRequired"] is False
+    assert integration_sandbox["runtimeExternalServiceRequired"] is False
+    assert integration_sandbox["deterministicRulesAuthoritative"] is True
+    assert integration_sandbox["externalCallsMade"] is False
+    assert integration_sandbox["webhooksEnabled"] is False
+    assert "No external calls" in integration_html
+    from audit_ledger_v2 import get_audit_ledger_payload, render_audit_ledger_html
+    audit_ledger = get_audit_ledger_payload()
+    audit_html = render_audit_ledger_html()
+    assert audit_ledger["phase"] == "Phase 16 - Evidence Audit Ledger"
+    assert audit_ledger["syntheticOnly"] is True
+    assert audit_ledger["advisoryOnly"] is True
+    assert audit_ledger["runtimeGpuRequired"] is False
+    assert audit_ledger["runtimeExternalServiceRequired"] is False
+    assert audit_ledger["deterministicRulesAuthoritative"] is True
+    assert audit_ledger["autonomousActionsAllowed"] is False
+    assert len(audit_ledger["ledgerSteps"]) == 8
+    assert "audit-style synthetic evidence trail, not compliance certification" in audit_html.lower()
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
