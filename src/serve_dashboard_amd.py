@@ -327,6 +327,9 @@ def command_center_with_amd_json() -> dict[str, Any]:
     payload.setdefault("routeMap", {})["auditLedger"] = "/audit-ledger"
     payload.setdefault("routeMap", {})["reviewerWorkspace"] = "/reviewer-workspace"
     payload.setdefault("routeMap", {})["fireworksCoverage"] = "/fireworks-coverage"
+    payload.setdefault("routeMap", {})["opsReadiness"] = "/ops-readiness"
+    payload.setdefault("routeMap", {})["evidenceHealth"] = "/evidence-health.json"
+    payload.setdefault("routeMap", {})["productionGapAnalysis"] = "/production-gap-analysis"
     return payload
 
 
@@ -350,6 +353,8 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/audit-ledger">Audit Ledger</a>
         <a class="button" href="/reviewer-workspace">Reviewer Workspace</a>
         <a class="button" href="/fireworks-coverage">Fireworks Coverage</a>
+        <a class="button" href="/ops-readiness">Ops Readiness</a>
+        <a class="button" href="/production-gap-analysis">Gap Analysis</a>
       </div>
     </section>
 """
@@ -381,6 +386,42 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 19/20 route wiring - static evidence health and gap analysis
+        phase1920_path = self.path.split("?", 1)[0]
+        if phase1920_path in (
+            "/ops-readiness",
+            "/ops-readiness.json",
+            "/evidence-health.json",
+            "/production-gap-analysis",
+            "/production-gap-analysis.json",
+        ):
+            import json as phase1920_json
+            from ops_readiness_v2 import get_ops_readiness_payload, render_ops_readiness_html
+            from production_gap_analysis_v2 import (
+                get_production_gap_analysis_payload,
+                render_production_gap_analysis_html,
+            )
+
+            if phase1920_path == "/ops-readiness":
+                phase1920_body = render_ops_readiness_html()
+                phase1920_type = "text/html; charset=utf-8"
+            elif phase1920_path in ("/ops-readiness.json", "/evidence-health.json"):
+                phase1920_body = phase1920_json.dumps(get_ops_readiness_payload(), indent=2, sort_keys=True)
+                phase1920_type = "application/json; charset=utf-8"
+            elif phase1920_path == "/production-gap-analysis":
+                phase1920_body = render_production_gap_analysis_html()
+                phase1920_type = "text/html; charset=utf-8"
+            else:
+                phase1920_body = phase1920_json.dumps(get_production_gap_analysis_payload(), indent=2, sort_keys=True)
+                phase1920_type = "application/json; charset=utf-8"
+
+            self.send_response(200)
+            self.send_header("Content-Type", phase1920_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase1920_body.encode("utf-8"))
+            return
+
         # Phase 17/18 route wiring - static reviewer workflow and advisory coverage
         phase1718_path = self.path.split("?", 1)[0]
         if phase1718_path in (
@@ -1041,6 +1082,36 @@ def self_check() -> None:
     assert fireworks_coverage["fireworksOptional"] is True
     assert fireworks_coverage["bulkExternalCallsMade"] is False
     assert "No bulk external calls" in coverage_html
+    from ops_readiness_v2 import get_ops_readiness_payload, render_ops_readiness_html
+    ops_readiness = get_ops_readiness_payload()
+    ops_html = render_ops_readiness_html()
+    assert ops_readiness["phase"] == "Phase 19 - Ops Readiness and Evidence Health"
+    assert ops_readiness["syntheticOnly"] is True
+    assert ops_readiness["advisoryOnly"] is True
+    assert ops_readiness["runtimeGpuRequired"] is False
+    assert ops_readiness["runtimeExternalServiceRequired"] is False
+    assert ops_readiness["productionMonitoringClaimed"] is False
+    assert ops_readiness["deterministicRulesAuthoritative"] is True
+    assert ops_readiness["readinessSummary"]["productionOpsReady"] is False
+    assert ops_readiness["readinessSummary"]["externalDependenciesRequiredForBoot"] is False
+    assert ops_readiness["readinessSummary"]["humanReviewRequiredForOperationalUse"] is True
+    assert "Evidence health only, not production monitoring." in ops_html
+    from production_gap_analysis_v2 import get_production_gap_analysis_payload, render_production_gap_analysis_html
+    gap_analysis = get_production_gap_analysis_payload()
+    gap_html = render_production_gap_analysis_html()
+    assert gap_analysis["phase"] == "Phase 20 - Production Gap Analysis"
+    assert gap_analysis["syntheticOnly"] is True
+    assert gap_analysis["advisoryOnly"] is True
+    assert gap_analysis["productionValidated"] is False
+    assert gap_analysis["pharmaValidated"] is False
+    assert gap_analysis["realWorldValidated"] is False
+    assert gap_analysis["complianceCertified"] is False
+    assert gap_analysis["autonomousActionsAllowed"] is False
+    assert gap_analysis["deterministicRulesAuthoritative"] is True
+    assert gap_analysis["readinessBoundary"]["realDeploymentReady"] is False
+    assert gap_analysis["readinessBoundary"]["requiresHumanReview"] is True
+    assert gap_analysis["readinessBoundary"]["requiresExternalExpertReview"] is True
+    assert "Demo evidence exists; real deployment requires additional validation and review." in gap_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
