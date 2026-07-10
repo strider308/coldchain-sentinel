@@ -341,6 +341,8 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "routeReliability": "/route-reliability",
         "demoSafeMode": "/demo-safe-mode",
         "decisionSimulator": "/decision-simulator",
+        "partnerApiContract": "/partner-api-contract",
+        "demoFlow": "/demo-flow",
     })
     return payload
 
@@ -375,6 +377,8 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/llm-advisory-eval">LLM Advisory Eval</a>
         <a class="button" href="/route-reliability">Route Reliability</a>
         <a class="button" href="/decision-simulator">Decision Simulator</a>
+        <a class="button" href="/partner-api-contract">Partner API Contract</a>
+        <a class="button" href="/demo-flow">Demo Flow</a>
       </div>
     </section>
 """
@@ -406,6 +410,35 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phases 29-30 - static partner contract and guided demo flow
+        phase2930_path = self.path.split("?", 1)[0]
+        phase2930_exact = {
+            "/partner-api-contract", "/partner-api-contract.json", "/partner-api-contract/openapi-preview.json",
+            "/partner-api-contract/errors.json", "/partner-api-contract/sample-request.json", "/partner-api-contract/sample-response.json",
+            "/demo-flow", "/demo-flow.json",
+        }
+        phase2930_step_paths = {f"/demo-flow/step-{number}" for number in range(1, 15)}
+        if phase2930_path in phase2930_exact or phase2930_path in phase2930_step_paths:
+            import json as phase2930_json
+            from demo_flow_v2 import get_demo_flow_payload, render_demo_flow_html, render_demo_step_html
+            from partner_api_contract_v2 import (
+                get_openapi_preview_payload, get_partner_api_contract_payload, get_partner_error_catalog_payload,
+                get_partner_sample_request_payload, get_partner_sample_response_payload, render_partner_api_contract_html,
+            )
+            try:
+                if phase2930_path == "/partner-api-contract": body, content_type = render_partner_api_contract_html(), "text/html; charset=utf-8"
+                elif phase2930_path == "/partner-api-contract.json": body, content_type = phase2930_json.dumps(get_partner_api_contract_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2930_path == "/partner-api-contract/openapi-preview.json": body, content_type = phase2930_json.dumps(get_openapi_preview_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2930_path == "/partner-api-contract/errors.json": body, content_type = phase2930_json.dumps(get_partner_error_catalog_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2930_path == "/partner-api-contract/sample-request.json": body, content_type = phase2930_json.dumps(get_partner_sample_request_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2930_path == "/partner-api-contract/sample-response.json": body, content_type = phase2930_json.dumps(get_partner_sample_response_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2930_path == "/demo-flow": body, content_type = render_demo_flow_html(), "text/html; charset=utf-8"
+                elif phase2930_path == "/demo-flow.json": body, content_type = phase2930_json.dumps(get_demo_flow_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                else: body, content_type = render_demo_step_html(int(phase2930_path.rsplit("-", 1)[-1])), "text/html; charset=utf-8"
+            except (KeyError, ValueError):
+                self.send_response(404); self.send_header("Content-Type", "application/json; charset=utf-8"); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(phase2930_json.dumps({"error": "unknown demo step"}).encode("utf-8")); return
+            self.send_response(200); self.send_header("Content-Type", content_type); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body.encode("utf-8")); return
+
         # Phases 22-28 - static expanded evidence, evaluation, exports, and review simulation
         phase2228_path = self.path.split("?", 1)[0]
         phase2228_exact = {
@@ -1265,6 +1298,36 @@ def self_check() -> None:
     assert "no self-HTTP monitoring" in render_route_reliability_html()
     assert get_decision_simulator_payload()["persistenceEnabled"] is False
     assert "no persistence; no operational action" in render_decision_simulator_html()
+    from partner_api_contract_v2 import (
+        get_openapi_preview_payload, get_partner_api_contract_payload, get_partner_error_catalog_payload,
+        render_partner_api_contract_html,
+    )
+    from demo_flow_v2 import get_demo_flow_payload, render_demo_flow_html, render_demo_step_html
+    partner_contract = get_partner_api_contract_payload()
+    demo_flow = get_demo_flow_payload()
+    for payload, expected_phase in (
+        (partner_contract, "Phase 29 - Partner API Contract v2"),
+        (demo_flow, "Phase 30 - Final Demo Flow Builder"),
+    ):
+        assert payload["phase"] == expected_phase
+        assert payload["syntheticOnly"] is True
+        assert payload["advisoryOnly"] is True
+        assert payload["runtimeGpuRequired"] is False
+        assert payload["runtimeExternalServiceRequired"] is False
+        assert payload["deterministicRulesAuthoritative"] is True
+        assert payload["autonomousActionsAllowed"] is False
+    assert partner_contract["externalCallsMade"] is False
+    assert partner_contract["webhooksEnabled"] is False
+    assert get_openapi_preview_payload()["openapi"] == "3.1.0"
+    assert len(get_partner_error_catalog_payload()["errorCatalog"]) == 6
+    assert "not a live partner API" in render_partner_api_contract_html()
+    assert demo_flow["demoFreezeActive"] is False
+    assert demo_flow["stepCount"] == 14
+    assert "Demo not frozen" in render_demo_flow_html()
+    assert "Jupyter/GPU used offline only" in render_demo_flow_html()
+    assert "Presenter script" in render_demo_step_html(1)
+    assert "no operational action" in render_demo_step_html(1)
+    assert "Step 14" in render_demo_step_html(14)
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
