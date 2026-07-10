@@ -332,6 +332,16 @@ def command_center_with_amd_json() -> dict[str, Any]:
     payload.setdefault("routeMap", {})["productionGapAnalysis"] = "/production-gap-analysis"
     payload.setdefault("routeMap", {})["expandedBenchmark"] = "/expanded-benchmark"
     payload.setdefault("routeMap", {})["benchmarkRefresh"] = "/benchmark-refresh"
+    payload.setdefault("routeMap", {}).update({
+        "scenarioLibraryV4": "/scenario-library-v4",
+        "evaluationMatrixV2": "/evaluation-matrix-v2",
+        "evidenceExport": "/evidence-export",
+        "policySandbox": "/policy-sandbox",
+        "llmAdvisoryEval": "/llm-advisory-eval",
+        "routeReliability": "/route-reliability",
+        "demoSafeMode": "/demo-safe-mode",
+        "decisionSimulator": "/decision-simulator",
+    })
     return payload
 
 
@@ -358,6 +368,13 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/ops-readiness">Ops Readiness</a>
         <a class="button" href="/production-gap-analysis">Gap Analysis</a>
         <a class="button" href="/expanded-benchmark">Expanded Benchmark</a>
+        <a class="button" href="/scenario-library-v4">Scenario Library v4</a>
+        <a class="button" href="/evaluation-matrix-v2">Evaluation Matrix v2</a>
+        <a class="button" href="/evidence-export">Evidence Export</a>
+        <a class="button" href="/policy-sandbox">Policy Sandbox</a>
+        <a class="button" href="/llm-advisory-eval">LLM Advisory Eval</a>
+        <a class="button" href="/route-reliability">Route Reliability</a>
+        <a class="button" href="/decision-simulator">Decision Simulator</a>
       </div>
     </section>
 """
@@ -389,6 +406,66 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phases 22-28 - static expanded evidence, evaluation, exports, and review simulation
+        phase2228_path = self.path.split("?", 1)[0]
+        phase2228_exact = {
+            "/scenario-library-v4", "/scenario-library-v4.json", "/evaluation-matrix-v2", "/evaluation-matrix-v2.json",
+            "/evidence-export", "/evidence-export.json", "/evidence-export/summary.md", "/evidence-export/routes.json",
+            "/policy-sandbox", "/policy-sandbox.json", "/policy-sandbox/sample-sop.md", "/policy-sandbox/mapping.json",
+            "/llm-advisory-eval", "/llm-advisory-eval.json", "/llm-advisory-eval/safety-cases.json",
+            "/route-reliability", "/route-reliability.json", "/demo-safe-mode", "/demo-safe-mode.json",
+            "/decision-simulator", "/decision-simulator.json",
+        }
+        phase2228_parts = [part for part in phase2228_path.split("/") if part]
+        phase2228_dynamic = (
+            phase2228_path.startswith("/scenario-library-v4/") and phase2228_path.endswith(".json")
+        ) or (
+            phase2228_path.startswith("/decision-simulator/") and phase2228_path.endswith(".json")
+        ) or (
+            len(phase2228_parts) == 3
+            and phase2228_parts[0] == "cases"
+            and phase2228_parts[2] in ("expanded-evidence.json", "evaluation-row.json")
+        )
+        if phase2228_path in phase2228_exact or phase2228_dynamic:
+            import json as phase2228_json
+            from decision_simulator_v2 import get_decision_simulator_case_payload, get_decision_simulator_payload, render_decision_simulator_html
+            from evaluation_matrix_v2 import get_evaluation_matrix_payload, get_evaluation_row_payload, render_evaluation_matrix_html
+            from evidence_export_pack_v2 import get_evidence_export_payload, get_evidence_route_manifest_payload, render_evidence_export_html
+            from llm_advisory_eval_v2 import get_llm_advisory_eval_payload, get_llm_safety_cases_payload, render_llm_advisory_eval_html
+            from policy_sandbox_v2 import get_policy_mapping_payload, get_policy_sandbox_payload, render_policy_sandbox_html
+            from route_reliability_v2 import get_route_reliability_payload, render_route_reliability_html
+            from scenario_library_v4 import get_expanded_scenario_payload, get_scenario_library_payload, render_scenario_library_html
+            try:
+                if phase2228_path == "/scenario-library-v4": body, content_type = render_scenario_library_html(), "text/html; charset=utf-8"
+                elif phase2228_path == "/scenario-library-v4.json": body, content_type = phase2228_json.dumps(get_scenario_library_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path.startswith("/scenario-library-v4/"):
+                    body, content_type = phase2228_json.dumps(get_expanded_scenario_payload(phase2228_path.rsplit("/", 1)[-1][:-5]), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path.endswith("/expanded-evidence.json"):
+                    body, content_type = phase2228_json.dumps(get_expanded_scenario_payload(phase2228_path.split("/")[2]), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path == "/evaluation-matrix-v2": body, content_type = render_evaluation_matrix_html(), "text/html; charset=utf-8"
+                elif phase2228_path == "/evaluation-matrix-v2.json": body, content_type = phase2228_json.dumps(get_evaluation_matrix_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path.endswith("/evaluation-row.json"):
+                    body, content_type = phase2228_json.dumps(get_evaluation_row_payload(phase2228_path.split("/")[2]), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path == "/evidence-export": body, content_type = render_evidence_export_html(), "text/html; charset=utf-8"
+                elif phase2228_path == "/evidence-export.json": body, content_type = phase2228_json.dumps(get_evidence_export_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path == "/evidence-export/summary.md": body, content_type = get_evidence_export_payload()["summaryMarkdown"], "text/markdown; charset=utf-8"
+                elif phase2228_path == "/evidence-export/routes.json": body, content_type = phase2228_json.dumps(get_evidence_route_manifest_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path == "/policy-sandbox": body, content_type = render_policy_sandbox_html(), "text/html; charset=utf-8"
+                elif phase2228_path == "/policy-sandbox.json": body, content_type = phase2228_json.dumps(get_policy_sandbox_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path == "/policy-sandbox/sample-sop.md": body, content_type = get_policy_sandbox_payload()["sampleSyntheticSopMarkdown"], "text/markdown; charset=utf-8"
+                elif phase2228_path == "/policy-sandbox/mapping.json": body, content_type = phase2228_json.dumps(get_policy_mapping_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path == "/llm-advisory-eval": body, content_type = render_llm_advisory_eval_html(), "text/html; charset=utf-8"
+                elif phase2228_path == "/llm-advisory-eval.json": body, content_type = phase2228_json.dumps(get_llm_advisory_eval_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path == "/llm-advisory-eval/safety-cases.json": body, content_type = phase2228_json.dumps(get_llm_safety_cases_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path in ("/route-reliability", "/demo-safe-mode"): body, content_type = render_route_reliability_html(), "text/html; charset=utf-8"
+                elif phase2228_path in ("/route-reliability.json", "/demo-safe-mode.json"): body, content_type = phase2228_json.dumps(get_route_reliability_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif phase2228_path == "/decision-simulator": body, content_type = render_decision_simulator_html(), "text/html; charset=utf-8"
+                elif phase2228_path == "/decision-simulator.json": body, content_type = phase2228_json.dumps(get_decision_simulator_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                else: body, content_type = phase2228_json.dumps(get_decision_simulator_case_payload(phase2228_path.rsplit("/", 1)[-1][:-5]), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            except KeyError:
+                self.send_response(404); self.send_header("Content-Type", "application/json; charset=utf-8"); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(phase2228_json.dumps({"error": "unknown synthetic case"}).encode("utf-8")); return
+            self.send_response(200); self.send_header("Content-Type", content_type); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body.encode("utf-8")); return
+
         # Phase 21 route wiring - expanded synthetic benchmark artifact
         phase21_path = self.path.split("?", 1)[0]
         if phase21_path in (
@@ -1154,6 +1231,40 @@ def self_check() -> None:
     assert len(expanded_benchmark["scenarioCoverage"]) >= 14
     assert expanded_benchmark["trainingBenchmark"]
     assert "GPU/Jupyter was used offline only." in expanded_html
+    from scenario_library_v4 import get_scenario_library_payload, render_scenario_library_html
+    from evaluation_matrix_v2 import get_evaluation_matrix_payload, render_evaluation_matrix_html
+    from evidence_export_pack_v2 import get_evidence_export_payload, render_evidence_export_html
+    from policy_sandbox_v2 import get_policy_sandbox_payload, render_policy_sandbox_html
+    from llm_advisory_eval_v2 import get_llm_advisory_eval_payload, render_llm_advisory_eval_html
+    from route_reliability_v2 import get_route_reliability_payload, render_route_reliability_html
+    from decision_simulator_v2 import get_decision_simulator_payload, render_decision_simulator_html
+    phase2228 = [
+        (get_scenario_library_payload(), "Phase 22 - Expanded Scenario Library v4"),
+        (get_evaluation_matrix_payload(), "Phase 23 - Evaluation Matrix v2"),
+        (get_evidence_export_payload(), "Phase 24 - Evidence Export Pack"),
+        (get_policy_sandbox_payload(), "Phase 25 - SOP Policy Knowledge Sandbox"),
+        (get_llm_advisory_eval_payload(), "Phase 26 - LLM Advisory Evaluation Pack"),
+        (get_route_reliability_payload(), "Phase 27 - Route Reliability and Demo Resilience"),
+        (get_decision_simulator_payload(), "Phase 28 - Human Review Decision Simulator"),
+    ]
+    for payload, expected_phase in phase2228:
+        assert payload["phase"] == expected_phase
+        assert payload["syntheticOnly"] is True
+        assert payload["advisoryOnly"] is True
+        assert payload["runtimeGpuRequired"] is False
+        assert payload["runtimeExternalServiceRequired"] is False
+        assert payload["deterministicRulesAuthoritative"] is True
+        assert payload["autonomousActionsAllowed"] is False
+    assert "synthetic benchmark/demo evidence only" in render_scenario_library_html()
+    assert "not external validation" in render_evaluation_matrix_html()
+    assert "Synthetic-only advisory evidence" in render_evidence_export_html()
+    assert "no real SOP ingestion" in render_policy_sandbox_html()
+    assert get_llm_advisory_eval_payload()["bulkExternalCallsMade"] is False
+    assert "Fallback always available" in render_llm_advisory_eval_html()
+    assert get_route_reliability_payload()["safeModeAvailable"] is True
+    assert "no self-HTTP monitoring" in render_route_reliability_html()
+    assert get_decision_simulator_payload()["persistenceEnabled"] is False
+    assert "no persistence; no operational action" in render_decision_simulator_html()
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
