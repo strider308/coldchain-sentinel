@@ -304,10 +304,12 @@ def render_gpu_benchmark_plan() -> str:
 
 
 def command_center_with_amd_json() -> dict[str, Any]:
+    from command_center_algorithm_v2 import get_command_center_algorithm_payload
     from dashboard_strategy_v2 import get_dashboard_strategy_payload
     payload = command_center_payload()
     amd = amd_acceleration_json()
     strategy = get_dashboard_strategy_payload()
+    algorithm = get_command_center_algorithm_payload()
     payload["amdAccelerationSummary"] = {
         "amdGpuEvidenceStatus": amd["amdGpuEvidenceStatus"],
         "amdGpuVerified": amd["amdGpuVerified"],
@@ -323,6 +325,12 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "whatNext": strategy["whatNext"],
         "demoHighlights": strategy["demoHighlights"],
         "whyLayer": strategy["whyLayer"],
+    }
+    payload["algorithmIntegrationSummary"] = {
+        "headlineMetrics": algorithm["headlineMetrics"],
+        "topAlgorithmInsights": algorithm["topAlgorithmInsights"],
+        "whatToInspectNext": algorithm["whatToInspectNext"],
+        "safetyBoundary": algorithm["safetyBoundary"],
     }
     payload.setdefault("routeMap", {})["amdAcceleration"] = "/amd-acceleration"
     payload.setdefault("routeMap", {})["gpuBenchmarkPlan"] = "/gpu-benchmark-plan"
@@ -361,20 +369,39 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "behaviorPredictor": "/behavior-predictor",
         "behaviorPredictorModelCard": "/behavior-predictor/model-card.json",
         "inspectionEngine": "/inspection-engine",
+        "algorithmConsole": "/algorithm-console",
+        "commandCenterAlgorithm": "/command-center-algorithm",
+        "algorithmInsights": "/algorithm-insights",
+        "whatToInspectNext": "/what-to-inspect-next.json",
     })
     return payload
 
 
 def render_command_center_with_amd() -> str:
+    from command_center_algorithm_v2 import get_command_center_algorithm_payload
     from dashboard_strategy_v2 import get_dashboard_strategy_payload
     payload = amd_acceleration_json()
     strategy = get_dashboard_strategy_payload()
+    algorithm = get_command_center_algorithm_payload()
     speedup = f'{_fmt(payload["speedupRatio"])}x' if payload.get("speedupRatio") else "pending"
     score = strategy["sentinelReadinessScore"]
     next_links = "".join(
         f'<a class="button" href="{html.escape(item["targetRoute"])}">{html.escape(item["action"])}</a>'
         for item in strategy["whatNext"][:3]
     )
+    inspect_links = "".join(
+        f'<a class="button" href="{html.escape(item["inspectionPlanRoute"])}">{html.escape(item["caseId"])}</a>'
+        for item in algorithm["whatToInspectNext"][:3]
+    )
+    algorithm_card = f"""
+    <section class="panel" data-testid="algorithm-insight-card" style="border-left:6px solid #146c5f;background:#e7f6f1">
+      <h2>STBL Algorithm Insights</h2>
+      <p class="metric">{algorithm["headlineMetrics"]["trainingRows"]:,}</p>
+      <p>Synthetic training rows. The distilled stdlib runtime predicts likely behavior and the first human inspection target.</p>
+      <h3>What to inspect next</h3>
+      <div class="toolbar"><a class="button" href="/algorithm-console">Algorithm Console</a><a class="button" href="/behavior-predictor">Behavior Predictor</a><a class="button" href="/inspection-engine">Inspection Engine</a><a class="button" href="/command-center-algorithm">Algorithm Insights</a><a class="button" href="/what-to-inspect-next.json">What to inspect</a>{inspect_links}</div>
+    </section>
+"""
     strategy_card = f"""
     <section class="panel" data-testid="dashboard-strategy-card" style="border-left:6px solid #146c5f;background:#eef9f6">
       <div class="grid">
@@ -418,10 +445,16 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/screenshot-worthy-dashboard">Screenshot-Worthy Dashboard</a>
         <a class="button" href="/behavior-predictor">Behavior Predictor</a>
         <a class="button" href="/inspection-engine">Inspection Engine</a>
+        <a class="button" href="/algorithm-console">Algorithm Console</a>
+        <a class="button" href="/command-center-algorithm">Algorithm Insights</a>
       </div>
     </section>
 """
-    command_center = render_command_center().replace("<main>", "<main>" + strategy_card, 1)
+    command_center = render_command_center().replace(
+        "</head>",
+        "<style>.grid>*{min-width:0}.panel{overflow-wrap:anywhere}@media(max-width:600px){.toolbar .button{white-space:normal}}</style></head>",
+        1,
+    ).replace("<main>", "<main>" + algorithm_card + strategy_card, 1)
     return command_center.replace("</main>", card + "  </main>")
 
 
@@ -450,6 +483,38 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phases 37-38 - algorithm evidence and command-center insights
+        algorithm_path = self.path.split("?", 1)[0]
+        algorithm_routes = {
+            "/algorithm-console", "/algorithm-console.json", "/algorithm-console/feature-weights.json",
+            "/algorithm-console/error-coverage.json", "/algorithm-console/prediction-table.json",
+            "/algorithm-console/weaknesses.json", "/algorithm-console/runtime-boundary.json",
+            "/command-center-algorithm", "/command-center-algorithm.json", "/algorithm-insights",
+            "/algorithm-insights.json", "/what-to-inspect-next.json",
+        }
+        if algorithm_path in algorithm_routes:
+            import json as algorithm_json
+            from algorithm_console_v2 import (
+                get_algorithm_console_payload, get_error_coverage_payload, get_feature_weights_payload,
+                get_prediction_table_payload, get_runtime_boundary_payload, get_weaknesses_payload,
+                render_algorithm_console_html,
+            )
+            from command_center_algorithm_v2 import (
+                get_command_center_algorithm_payload, get_what_to_inspect_next_payload,
+                render_command_center_algorithm_html,
+            )
+            if algorithm_path == "/algorithm-console": body, content_type = render_algorithm_console_html(), "text/html; charset=utf-8"
+            elif algorithm_path == "/algorithm-console.json": body, content_type = algorithm_json.dumps(get_algorithm_console_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif algorithm_path == "/algorithm-console/feature-weights.json": body, content_type = algorithm_json.dumps(get_feature_weights_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif algorithm_path == "/algorithm-console/error-coverage.json": body, content_type = algorithm_json.dumps(get_error_coverage_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif algorithm_path == "/algorithm-console/prediction-table.json": body, content_type = algorithm_json.dumps(get_prediction_table_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif algorithm_path == "/algorithm-console/weaknesses.json": body, content_type = algorithm_json.dumps(get_weaknesses_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif algorithm_path == "/algorithm-console/runtime-boundary.json": body, content_type = algorithm_json.dumps(get_runtime_boundary_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif algorithm_path in ("/command-center-algorithm", "/algorithm-insights"): body, content_type = render_command_center_algorithm_html(), "text/html; charset=utf-8"
+            elif algorithm_path == "/what-to-inspect-next.json": body, content_type = algorithm_json.dumps(get_what_to_inspect_next_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            else: body, content_type = algorithm_json.dumps(get_command_center_algorithm_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            self.send_response(200); self.send_header("Content-Type", content_type); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body.encode("utf-8")); return
+
         # Phases 35B-36 - distilled behavior prediction and inspection guidance
         stbl_path = self.path.split("?", 1)[0]
         stbl_exact = {
@@ -1515,6 +1580,39 @@ def self_check() -> None:
     assert "What should a human inspect" in inspection_html
     assert "Synthetic-only" in inspection_html
     assert "Advisory-only" in inspection_html
+    from algorithm_console_v2 import get_algorithm_console_payload, render_algorithm_console_html
+    from command_center_algorithm_v2 import get_command_center_algorithm_payload, render_command_center_algorithm_html
+    algorithm_console = get_algorithm_console_payload()
+    command_algorithm = get_command_center_algorithm_payload()
+    algorithm_html = render_algorithm_console_html()
+    command_algorithm_html = render_command_center_algorithm_html()
+    assert algorithm_console["phase"] == "Phase 37 - Algorithm Evidence Console"
+    assert command_algorithm["phase"] == "Phase 38 - Command Center Algorithm Integration"
+    assert algorithm_console["trainingRows"] == 171000
+    assert algorithm_console["faultPrototypeCount"] == 38
+    assert algorithm_console["supportedFaultCount"] == 38
+    assert algorithm_console["featureWeightCount"] == 19
+    assert command_algorithm["headlineMetrics"]["trainingRows"] == 171000
+    assert command_algorithm["headlineMetrics"]["supportedFaultCount"] == 38
+    assert command_algorithm["headlineMetrics"]["featureWeightCount"] == 19
+    for payload in (algorithm_console, command_algorithm):
+        assert payload["syntheticOnly"] is True
+        assert payload["advisoryOnly"] is True
+        assert payload["realWorldDataUsed"] is False
+        assert payload["runtimeGpuRequired"] is False
+        assert payload["runtimeExternalServiceRequired"] is False
+        assert payload["runtimePyTorchRequired"] is False
+        assert payload["deterministicRulesAuthoritative"] is True
+        assert payload["autonomousActionsAllowed"] is False
+    assert command_algorithm["dependenciesAdded"] is False
+    assert command_algorithm["architectureChanged"] is False
+    for required_text in ("Algorithm Evidence Console", "171,000", "feature weights", "Fault coverage", "Runtime safety boundary"):
+        assert required_text in algorithm_html
+    for required_text in ("What is wrong", "What should we inspect", "STBL", "Algorithm Console", "Behavior Predictor", "Inspection Engine"):
+        assert required_text in command_algorithm_html
+    command_center_html = render_command_center_with_amd()
+    for required_text in ("Algorithm Console", "Behavior Predictor", "Inspection Engine", "What to inspect"):
+        assert required_text in command_center_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]

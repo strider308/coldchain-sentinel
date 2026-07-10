@@ -123,6 +123,8 @@ def get_dashboard_strategy_payload() -> dict[str, Any]:
             "evaluationMatrixV2": "/evaluation-matrix-v2", "expandedBenchmark": "/expanded-benchmark", "fireworksAdvisory": "/fireworks-advisory",
             "llmAdvisoryEval": "/llm-advisory-eval", "decisionSimulator": "/decision-simulator", "partnerApiContract": "/partner-api-contract",
             "finalValidation": "/final-validation", "productionGapAnalysis": "/production-gap-analysis",
+            "algorithmConsole": "/algorithm-console", "commandCenterAlgorithm": "/command-center-algorithm",
+            "behaviorPredictor": "/behavior-predictor", "inspectionEngine": "/inspection-engine",
         },
     }
 
