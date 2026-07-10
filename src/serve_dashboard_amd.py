@@ -373,6 +373,10 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "commandCenterAlgorithm": "/command-center-algorithm",
         "algorithmInsights": "/algorithm-insights",
         "whatToInspectNext": "/what-to-inspect-next.json",
+        "judgePack": "/judge-pack",
+        "largeScaleDataLab": "/large-scale-data-lab",
+        "faultAtlas": "/fault-atlas",
+        "caseWalkthroughs": "/case-walkthroughs",
     })
     return payload
 
@@ -399,7 +403,7 @@ def render_command_center_with_amd() -> str:
       <p class="metric">{algorithm["headlineMetrics"]["trainingRows"]:,}</p>
       <p>Synthetic training rows. The distilled stdlib runtime predicts likely behavior and the first human inspection target.</p>
       <h3>What to inspect next</h3>
-      <div class="toolbar"><a class="button" href="/algorithm-console">Algorithm Console</a><a class="button" href="/behavior-predictor">Behavior Predictor</a><a class="button" href="/inspection-engine">Inspection Engine</a><a class="button" href="/command-center-algorithm">Algorithm Insights</a><a class="button" href="/what-to-inspect-next.json">What to inspect</a>{inspect_links}</div>
+      <div class="toolbar"><a class="button" href="/algorithm-console">Algorithm Console</a><a class="button" href="/behavior-predictor">Behavior Predictor</a><a class="button" href="/inspection-engine">Inspection Engine</a><a class="button" href="/command-center-algorithm">Algorithm Insights</a><a class="button" href="/judge-pack">Judge Pack</a><a class="button" href="/fault-atlas">Fault Atlas</a><a class="button" href="/case-walkthroughs">Case Walkthroughs</a><a class="button" href="/large-scale-data-lab">Large-Scale Data Lab</a><a class="button" href="/what-to-inspect-next.json">What to inspect</a>{inspect_links}</div>
     </section>
 """
     strategy_card = f"""
@@ -483,6 +487,52 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phases 39-42 - judge evidence, scale profiles, fault atlas, and walkthroughs
+        evidence_path = self.path.split("?", 1)[0]
+        evidence_exact = {
+            "/judge-pack", "/judge-pack.json", "/judge-pack/demo-script.json",
+            "/judge-pack/technical-proof.json", "/judge-pack/claims-boundary.json",
+            "/large-scale-data-lab", "/large-scale-data-lab.json",
+            "/large-scale-data-lab/profiles.json", "/large-scale-data-lab/throughput-summary.json",
+            "/fault-atlas", "/fault-atlas.json", "/fault-atlas/coverage.json",
+            "/case-walkthroughs", "/case-walkthroughs.json",
+        }
+        evidence_parts = [part for part in evidence_path.split("/") if part]
+        fault_detail = len(evidence_parts) == 2 and evidence_parts[0] == "fault-atlas" and evidence_parts[1].endswith(".json")
+        case_detail = len(evidence_parts) == 2 and evidence_parts[0] == "case-walkthroughs"
+        if evidence_path in evidence_exact or fault_detail or case_detail:
+            import json as evidence_json
+            from case_walkthroughs_v2 import get_case_walkthrough_payload, get_case_walkthroughs_payload, render_case_walkthroughs_html
+            from fault_atlas_v2 import get_fault_atlas_coverage_payload, get_fault_atlas_payload, get_fault_detail_payload, render_fault_atlas_html
+            from judge_evidence_pack_v2 import get_claims_boundary_payload, get_demo_script_payload, get_judge_evidence_pack_payload, get_technical_proof_payload, render_judge_evidence_pack_html
+            from large_scale_data_lab_v2 import get_large_scale_data_lab_payload, get_large_scale_profiles_payload, get_throughput_summary_payload, render_large_scale_data_lab_html
+            try:
+                if evidence_path == "/judge-pack": body, content_type = render_judge_evidence_pack_html(), "text/html; charset=utf-8"
+                elif evidence_path == "/judge-pack.json": body, content_type = evidence_json.dumps(get_judge_evidence_pack_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif evidence_path == "/judge-pack/demo-script.json": body, content_type = evidence_json.dumps(get_demo_script_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif evidence_path == "/judge-pack/technical-proof.json": body, content_type = evidence_json.dumps(get_technical_proof_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif evidence_path == "/judge-pack/claims-boundary.json": body, content_type = evidence_json.dumps(get_claims_boundary_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif evidence_path == "/large-scale-data-lab": body, content_type = render_large_scale_data_lab_html(), "text/html; charset=utf-8"
+                elif evidence_path == "/large-scale-data-lab.json": body, content_type = evidence_json.dumps(get_large_scale_data_lab_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif evidence_path == "/large-scale-data-lab/profiles.json": body, content_type = evidence_json.dumps(get_large_scale_profiles_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif evidence_path == "/large-scale-data-lab/throughput-summary.json": body, content_type = evidence_json.dumps(get_throughput_summary_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif evidence_path == "/fault-atlas": body, content_type = render_fault_atlas_html(), "text/html; charset=utf-8"
+                elif evidence_path == "/fault-atlas.json": body, content_type = evidence_json.dumps(get_fault_atlas_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif evidence_path == "/fault-atlas/coverage.json": body, content_type = evidence_json.dumps(get_fault_atlas_coverage_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif fault_detail:
+                    body, content_type = evidence_json.dumps(get_fault_detail_payload(evidence_parts[1][:-5]), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif evidence_path == "/case-walkthroughs": body, content_type = render_case_walkthroughs_html(), "text/html; charset=utf-8"
+                elif evidence_path == "/case-walkthroughs.json": body, content_type = evidence_json.dumps(get_case_walkthroughs_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                else:
+                    case_id = evidence_parts[1][:-5] if evidence_parts[1].endswith(".json") else evidence_parts[1]
+                    payload = get_case_walkthrough_payload(case_id)
+                    body, content_type = (evidence_json.dumps(payload, indent=2, sort_keys=True), "application/json; charset=utf-8") if evidence_parts[1].endswith(".json") else (render_case_walkthroughs_html(case_id), "text/html; charset=utf-8")
+                self.send_response(200)
+            except KeyError:
+                body, content_type = evidence_json.dumps({"error": "not found", "path": evidence_path}, sort_keys=True), "application/json; charset=utf-8"
+                self.send_response(404)
+            self.send_header("Content-Type", content_type); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body.encode("utf-8")); return
+
         # Phases 37-38 - algorithm evidence and command-center insights
         algorithm_path = self.path.split("?", 1)[0]
         algorithm_routes = {
@@ -1613,6 +1663,48 @@ def self_check() -> None:
     command_center_html = render_command_center_with_amd()
     for required_text in ("Algorithm Console", "Behavior Predictor", "Inspection Engine", "What to inspect"):
         assert required_text in command_center_html
+    from case_walkthroughs_v2 import get_case_walkthroughs_payload, render_case_walkthroughs_html
+    from fault_atlas_v2 import get_fault_atlas_payload, render_fault_atlas_html
+    from judge_evidence_pack_v2 import get_judge_evidence_pack_payload, render_judge_evidence_pack_html
+    from large_scale_data_lab_v2 import get_large_scale_data_lab_payload, render_large_scale_data_lab_html
+    phase_payloads = (
+        get_judge_evidence_pack_payload(), get_large_scale_data_lab_payload(),
+        get_fault_atlas_payload(), get_case_walkthroughs_payload(),
+    )
+    assert [item["phase"] for item in phase_payloads] == [
+        "Phase 39 - Final Judge Evidence Pack",
+        "Phase 40 - Large-Scale Synthetic Data Demonstration",
+        "Phase 41 - Fault Universe Error Atlas",
+        "Phase 42 - End-to-End Case Walkthroughs",
+    ]
+    for payload in phase_payloads:
+        assert payload["syntheticOnly"] is True
+        assert payload["advisoryOnly"] is True
+        assert payload["realWorldDataUsed"] is False
+        assert payload["runtimeGpuRequired"] is False
+        assert payload["runtimeExternalServiceRequired"] is False
+        assert payload["runtimePyTorchRequired"] is False
+        assert payload["deterministicRulesAuthoritative"] is True
+        assert payload["autonomousActionsAllowed"] is False
+        assert payload["externalCallsRequired"] is False
+        assert payload["dependenciesAdded"] is False
+    assert phase_payloads[0]["headlineMetrics"]["trainingRows"] == 171000
+    assert phase_payloads[1]["rawLargeDatasetsCommitted"] is False
+    assert phase_payloads[2]["faultCount"] == 38
+    assert phase_payloads[3]["supportedWalkthroughCount"] == 6
+    phase_html = (
+        render_judge_evidence_pack_html(), render_large_scale_data_lab_html(),
+        render_fault_atlas_html(), render_case_walkthroughs_html(),
+    )
+    for rendered, title in zip(phase_html, (
+        "Final Judge Evidence Pack", "Large-Scale Synthetic Data",
+        "Fault Universe", "End-to-End Case Walkthroughs",
+    )):
+        assert title in rendered
+        assert "Synthetic-only" in rendered
+        assert "Advisory-only" in rendered
+    for label in ("Judge Pack", "Fault Atlas", "Case Walkthroughs", "Large-Scale Data Lab"):
+        assert label in command_center_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]

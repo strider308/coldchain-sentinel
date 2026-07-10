@@ -99,6 +99,8 @@ def get_command_center_algorithm_payload() -> dict[str, Any]:
             "behaviorPredictor": "/behavior-predictor", "inspectionEngine": "/inspection-engine",
             "dashboardStrategy": "/dashboard-strategy", "demoFlow": "/demo-flow",
             "productionGapAnalysis": "/production-gap-analysis",
+            "judgePack": "/judge-pack", "largeScaleDataLab": "/large-scale-data-lab",
+            "faultAtlas": "/fault-atlas", "caseWalkthroughs": "/case-walkthroughs",
         },
     }
 

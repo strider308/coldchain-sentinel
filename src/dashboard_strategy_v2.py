@@ -125,6 +125,8 @@ def get_dashboard_strategy_payload() -> dict[str, Any]:
             "finalValidation": "/final-validation", "productionGapAnalysis": "/production-gap-analysis",
             "algorithmConsole": "/algorithm-console", "commandCenterAlgorithm": "/command-center-algorithm",
             "behaviorPredictor": "/behavior-predictor", "inspectionEngine": "/inspection-engine",
+            "judgePack": "/judge-pack", "largeScaleDataLab": "/large-scale-data-lab",
+            "faultAtlas": "/fault-atlas", "caseWalkthroughs": "/case-walkthroughs",
         },
     }
 

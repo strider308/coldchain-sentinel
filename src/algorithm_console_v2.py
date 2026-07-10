@@ -190,6 +190,8 @@ def get_algorithm_console_payload() -> dict[str, Any]:
             "weaknesses": "/algorithm-console/weaknesses.json", "runtimeBoundary": "/algorithm-console/runtime-boundary.json",
             "behaviorPredictor": "/behavior-predictor", "inspectionEngine": "/inspection-engine",
             "dashboardStrategy": "/dashboard-strategy", "commandCenter": "/command-center",
+            "judgePack": "/judge-pack", "largeScaleDataLab": "/large-scale-data-lab",
+            "faultAtlas": "/fault-atlas", "caseWalkthroughs": "/case-walkthroughs",
         },
     }
 
