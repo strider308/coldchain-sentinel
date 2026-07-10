@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 from typing import Any
+from ui_design_system_v2 import unified_page
 
 PHASE = "Phase 43 - Final Route Manifest and Live QA Sweep"
 LIVE_COMMIT = "510e909e2330b887ced0ff7061a5b9f465472499"
@@ -69,6 +70,7 @@ Write-Host "FINAL LIVE QA SWEEP PASSED"
 '''
 
 
+@unified_page
 def render_final_route_manifest_html() -> str:
     payload = get_final_route_manifest_payload()
     groups = "".join(f'<section><h2>{html.escape(group)}</h2><p>{len(ROUTE_GROUPS[group])} required routes</p></section>' for group in payload["routeGroups"])

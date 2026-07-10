@@ -4,6 +4,7 @@ import html
 from typing import Any
 
 from algorithm_console_v2 import get_algorithm_console_payload
+from ui_design_system_v2 import unified_page
 
 
 PHASE = "Phase 39 - Final Judge Evidence Pack"
@@ -90,6 +91,7 @@ def get_judge_evidence_pack_payload() -> dict[str, Any]:
     }
 
 
+@unified_page
 def render_judge_evidence_pack_html() -> str:
     payload = get_judge_evidence_pack_payload()
     metrics = payload["headlineMetrics"]

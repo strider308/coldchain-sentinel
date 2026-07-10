@@ -10,6 +10,7 @@ from behavior_predictor_v2 import (
     load_stbl_artifacts,
 )
 from inspection_engine_v2 import get_inspection_engine_payload
+from ui_design_system_v2 import unified_page
 
 
 PHASE = "Phase 37 - Algorithm Evidence Console"
@@ -196,6 +197,7 @@ def get_algorithm_console_payload() -> dict[str, Any]:
     }
 
 
+@unified_page
 def render_algorithm_console_html() -> str:
     payload = get_algorithm_console_payload()
     features = get_feature_weights_payload()["topWeightedFeatures"]

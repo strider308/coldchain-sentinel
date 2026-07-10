@@ -9,6 +9,7 @@ from expanded_benchmark_v2 import get_expanded_benchmark_payload
 from fireworks_coverage_v2 import get_fireworks_coverage_payload
 from route_reliability_v2 import get_route_reliability_payload
 from scenario_library_v4 import get_scenario_library_payload
+from ui_design_system_v2 import unified_page
 
 
 PHASE = "Phase 33 - Screenshot-Worthy Command Center Upgrade"
@@ -133,6 +134,7 @@ def get_dashboard_strategy_payload() -> dict[str, Any]:
     }
 
 
+@unified_page
 def render_dashboard_strategy_html() -> str:
     payload = get_dashboard_strategy_payload()
     score = payload["sentinelReadinessScore"]

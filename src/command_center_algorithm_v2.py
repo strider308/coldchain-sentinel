@@ -6,6 +6,7 @@ from typing import Any
 from algorithm_console_v2 import get_algorithm_console_payload
 from behavior_predictor_v2 import get_behavior_predictor_payload
 from inspection_engine_v2 import BLOCKED_ACTIONS, get_inspection_plan
+from ui_design_system_v2 import unified_page
 
 
 PHASE = "Phase 38 - Command Center Algorithm Integration"
@@ -111,6 +112,7 @@ def get_algorithm_insights_payload() -> dict[str, Any]:
     return get_command_center_algorithm_payload()
 
 
+@unified_page
 def render_command_center_algorithm_html() -> str:
     payload = get_command_center_algorithm_payload()
     metrics = payload["headlineMetrics"]

@@ -8,8 +8,10 @@ the synthetic SERS GPU benchmark artifact.
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import html
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -27,6 +29,7 @@ from serve_dashboard import (
     system_status_json,
     validation_evidence_json,
 )
+from ui_design_system_v2 import render_metric_cards, render_page_shell, render_route_buttons
 
 from sers_v2 import (
     render_sers_page,
@@ -303,7 +306,8 @@ def render_gpu_benchmark_plan() -> str:
     return page("ColdChain Sentinel GPU Benchmark Plan", body)
 
 
-def command_center_with_amd_json() -> dict[str, Any]:
+@lru_cache(maxsize=1)
+def _cached_command_center_with_amd_json() -> dict[str, Any]:
     from command_center_algorithm_v2 import get_command_center_algorithm_payload
     from dashboard_strategy_v2 import get_dashboard_strategy_payload
     payload = command_center_payload()
@@ -383,88 +387,66 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "visualPolish": "/visual-polish",
         "finalFreeze": "/final-freeze",
     })
+    payload.update({
+        "syntheticOnly": True,
+        "advisoryOnly": True,
+        "runtimeGpuRequired": False,
+        "runtimeExternalServiceRequired": False,
+        "runtimePyTorchRequired": False,
+        "autonomousActionsAllowed": False,
+        "deterministicRulesAuthoritative": True,
+        "uiVersion": "coherent-fast-v1",
+        "simplifiedDashboard": True,
+        "performanceOptimized": True,
+        "primaryDemoRoutes": ["/case-walkthroughs/door-open-warming", "/algorithm-console", "/judge-pack", "/submission-readiness"],
+        "aboveTheFoldActions": 4,
+        "visibleMetricCount": 4,
+        "visibleInspectionCardCount": 4,
+    })
     return payload
 
 
+def command_center_with_amd_json() -> dict[str, Any]:
+    # ponytail: static synthetic summary; invalidate only when source evidence changes.
+    return deepcopy(_cached_command_center_with_amd_json())
+
+
 def render_command_center_with_amd() -> str:
-    from command_center_algorithm_v2 import get_command_center_algorithm_payload
-    from dashboard_strategy_v2 import get_dashboard_strategy_payload
-    payload = amd_acceleration_json()
-    strategy = get_dashboard_strategy_payload()
-    algorithm = get_command_center_algorithm_payload()
-    speedup = f'{_fmt(payload["speedupRatio"])}x' if payload.get("speedupRatio") else "pending"
-    score = strategy["sentinelReadinessScore"]
-    next_links = "".join(
-        f'<a class="button" href="{html.escape(item["targetRoute"])}">{html.escape(item["action"])}</a>'
-        for item in strategy["whatNext"][:3]
+    inspections = [
+        ("Door-open warming", "Door event timeline and affected zone", "/case-walkthroughs/door-open-warming"),
+        ("Gateway delay", "Gateway receipt timestamps and route segment", "/case-walkthroughs/gateway-delay"),
+        ("Unresolved mapping", "Pallet-zone identity mapping", "/case-walkthroughs/unresolved-mapping-risk"),
+        ("Mixed quality evidence", "Quality warnings before interpretation", "/case-walkthroughs/mixed-quality-evidence"),
+    ]
+    inspection_cards = "".join(f'<article class="ui-panel"><h3>{html.escape(title)}</h3><p class="ui-subtitle">{html.escape(target)}</p><a href="{route}">Inspect case</a></article>' for title, target, route in inspections)
+    evidence = render_route_buttons([
+        ("Algorithm Console", "/algorithm-console"), ("Behavior Predictor", "/behavior-predictor"),
+        ("Inspection Engine", "/inspection-engine"), ("Fault Atlas", "/fault-atlas"),
+        ("Large Scale Data Lab", "/large-scale-data-lab"), ("Final Route Manifest", "/final-route-manifest"),
+    ])
+    sections = f'''{render_metric_cards([("171,000", "synthetic rows"), ("38", "fault classes"), ("95.51%", "neural fault accuracy"), ("94.06%", "distilled behavior accuracy")])}
+    <section class="ui-section"><h2>What to inspect next</h2><p class="ui-subtitle">Choose one concise evidence path instead of scanning the full route inventory.</p><div class="ui-grid">{inspection_cards}</div></section>
+    <section class="ui-safety"><h2>Why it is safe</h2><p>No real data. No autonomous operations. Deterministic rules remain authoritative. No runtime GPU or PyTorch.</p></section>
+    <section class="ui-section"><h2>Evidence map</h2><p class="ui-subtitle">Open a focused detail route when you need deeper evidence.</p>{evidence}</section>'''
+    return render_page_shell(
+        "ColdChain Sentinel", "Synthetic-only. Advisory-only. Human-review-first.",
+        ["Synthetic-only", "Advisory-only", "Human-review-first"],
+        [("Start Demo", "/case-walkthroughs/door-open-warming"), ("Algorithm Evidence", "/algorithm-console"), ("Judge Pack", "/judge-pack"), ("Submission", "/submission-readiness")],
+        sections,
+        [("Dashboard Strategy", "/dashboard-strategy"), ("Final Freeze", "/final-freeze")],
     )
-    inspect_links = "".join(
-        f'<a class="button" href="{html.escape(item["inspectionPlanRoute"])}">{html.escape(item["caseId"])}</a>'
-        for item in algorithm["whatToInspectNext"][:3]
+
+
+def render_root_with_design_system() -> str:
+    sections = '''<section class="ui-section"><h2>Start here</h2><p class="ui-subtitle">Follow one synthetic case from signal to a human inspection target.</p></section>
+    <section class="ui-safety"><h2>Safety boundary</h2><p>Synthetic-only evidence. Advisory-only signals. Deterministic rules remain authoritative and operational actions stay with humans.</p></section>'''
+    return render_page_shell(
+        "ColdChain Sentinel", "A concise evidence path for synthetic cold-chain review.",
+        ["Synthetic-only", "Advisory-only", "Deterministic rules authoritative"],
+        [("Command Center", "/command-center"), ("Judge Pack", "/judge-pack"), ("Case Walkthroughs", "/case-walkthroughs"), ("Algorithm Console", "/algorithm-console"), ("Submission", "/submission-readiness")],
+        sections,
+        [("Review cases", "/cases"), ("Review workspace", "/cases/blocked-unresolved-pallet/review"), ("Sensor Lab", "/sensor-lab"), ("Data Pipeline", "/data-pipeline")],
     )
-    algorithm_card = f"""
-    <section class="panel" data-testid="algorithm-insight-card" style="border-left:6px solid #146c5f;background:#e7f6f1">
-      <h2>STBL Algorithm Insights</h2>
-      <p class="metric">{algorithm["headlineMetrics"]["trainingRows"]:,}</p>
-      <p>Synthetic training rows. The distilled stdlib runtime predicts likely behavior and the first human inspection target.</p>
-      <h3>What to inspect next</h3>
-      <div class="toolbar"><a class="button" href="/algorithm-console">Algorithm Console</a><a class="button" href="/behavior-predictor">Behavior Predictor</a><a class="button" href="/inspection-engine">Inspection Engine</a><a class="button" href="/command-center-algorithm">Algorithm Insights</a><a class="button" href="/judge-pack">Judge Pack</a><a class="button" href="/fault-atlas">Fault Atlas</a><a class="button" href="/case-walkthroughs">Case Walkthroughs</a><a class="button" href="/large-scale-data-lab">Large-Scale Data Lab</a><a class="button" href="/final-route-manifest">Final Route Manifest</a><a class="button" href="/submission-readiness">Submission Readiness</a><a class="button" href="/demo-script-final">Demo Script</a><a class="button" href="/visual-polish">Visual Polish</a><a class="button" href="/final-freeze">Final Freeze</a><a class="button" href="/what-to-inspect-next.json">What to inspect</a>{inspect_links}</div>
-    </section>
-"""
-    strategy_card = f"""
-    <section class="panel" data-testid="dashboard-strategy-card" style="border-left:6px solid #146c5f;background:#eef9f6">
-      <div class="grid">
-        <article><p class="muted">Product home screen</p><h2>ColdChain Sentinel</h2><p>From noisy synthetic evidence to clear advisory signals, safe fallbacks, and human-review next steps.</p><div class="toolbar"><a class="button" href="/dashboard-strategy">Dashboard Strategy</a><a class="button" href="/screenshot-worthy-dashboard">Screenshot-Worthy Dashboard</a>{next_links}</div></article>
-        <article><h2>{html.escape(score["label"])}</h2><p class="metric">{score["score"]}</p><p>{html.escape(score["band"])}. {html.escape(score["meaning"])}</p><p class="muted">Synthetic advisory metric. Not an operational score.</p></article>
-      </div>
-    </section>
-"""
-    card = f"""
-    <section class="panel" data-testid="amd-acceleration-card">
-      <h2>AMD GPU Evidence</h2>
-      <p>AMD GPU environment: {html.escape(payload["amdGpuEvidenceStatus"])}.</p>
-      <p>SERS GPU benchmark: {html.escape(payload["sersGpuTrainingBenchmarkStatus"])}. Synthetic CPU/GPU speedup: {html.escape(speedup)}.</p>
-      <p>No real-world, production, compliance, specific GPU model, or accuracy-improvement claim is made.</p>
-      <div class="toolbar">
-        <a class="button" href="/amd-acceleration">AMD Evidence</a>
-        <a class="button" href="/gpu-benchmark-plan">GPU Benchmark Plan</a>
-        <a class="button" href="/gpu-research-lab">GPU Research Lab</a>
-        <a class="button" href="/fireworks-advisory">Fireworks Advisory</a>
-        <a class="button" href="/demo-console">Demo Console</a>
-        <a class="button" href="/final-validation">Final Validation</a>
-        <a class="button" href="/integration-sandbox">Integration Sandbox</a>
-        <a class="button" href="/audit-ledger">Audit Ledger</a>
-        <a class="button" href="/reviewer-workspace">Reviewer Workspace</a>
-        <a class="button" href="/fireworks-coverage">Fireworks Coverage</a>
-        <a class="button" href="/ops-readiness">Ops Readiness</a>
-        <a class="button" href="/production-gap-analysis">Gap Analysis</a>
-        <a class="button" href="/expanded-benchmark">Expanded Benchmark</a>
-        <a class="button" href="/scenario-library-v4">Scenario Library v4</a>
-        <a class="button" href="/evaluation-matrix-v2">Evaluation Matrix v2</a>
-        <a class="button" href="/evidence-export">Evidence Export</a>
-        <a class="button" href="/policy-sandbox">Policy Sandbox</a>
-        <a class="button" href="/llm-advisory-eval">LLM Advisory Eval</a>
-        <a class="button" href="/route-reliability">Route Reliability</a>
-        <a class="button" href="/decision-simulator">Decision Simulator</a>
-        <a class="button" href="/partner-api-contract">Partner API Contract</a>
-        <a class="button" href="/demo-flow">Demo Flow</a>
-        <a class="button" href="/demo-navigation">Demo Navigation</a>
-        <a class="button" href="/demo-freeze">Demo Freeze</a>
-        <a class="button" href="/dashboard-strategy">Dashboard Strategy</a>
-        <a class="button" href="/screenshot-worthy-dashboard">Screenshot-Worthy Dashboard</a>
-        <a class="button" href="/behavior-predictor">Behavior Predictor</a>
-        <a class="button" href="/inspection-engine">Inspection Engine</a>
-        <a class="button" href="/algorithm-console">Algorithm Console</a>
-        <a class="button" href="/command-center-algorithm">Algorithm Insights</a>
-      </div>
-    </section>
-"""
-    command_center = render_command_center().replace(
-        "</head>",
-        "<style>.grid>*{min-width:0}.panel{overflow-wrap:anywhere}@media(max-width:600px){.toolbar .button{white-space:normal}}</style></head>",
-        1,
-    ).replace("<main>", "<main>" + algorithm_card + strategy_card, 1)
-    return command_center.replace("</main>", card + "  </main>")
 
 
 def system_status_with_amd_json() -> dict[str, Any]:
@@ -494,6 +476,9 @@ class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
         # Phases 43-47 - final submission readiness and owner freeze decision
         final_path = self.path.split("?", 1)[0]
+        if final_path in ("/", "/index.html"):
+            self.respond_text(render_root_with_design_system())
+            return
         final_routes = {
             "/final-route-manifest", "/final-route-manifest.json", "/live-qa-checklist",
             "/live-qa-checklist.json", "/live-validation-script.ps1", "/submission-readiness",
@@ -1705,8 +1690,19 @@ def self_check() -> None:
     for required_text in ("What is wrong", "What should we inspect", "STBL", "Algorithm Console", "Behavior Predictor", "Inspection Engine"):
         assert required_text in command_algorithm_html
     command_center_html = render_command_center_with_amd()
-    for required_text in ("Algorithm Console", "Behavior Predictor", "Inspection Engine", "What to inspect"):
+    command_center = command_center_with_amd_json()
+    for required_text in ("ColdChain Sentinel", "Start Demo", "Algorithm Evidence", "Judge Pack", "Submission", "What to inspect next", "Synthetic-only", "Advisory-only", "Algorithm Console", "Behavior Predictor", "Inspection Engine"):
         assert required_text in command_center_html
+    assert len(command_center_html.encode("utf-8")) < 120_000
+    assert command_center_html.count("<a ") < 30
+    assert command_center["simplifiedDashboard"] is True
+    assert command_center["performanceOptimized"] is True
+    assert command_center["uiVersion"] == "coherent-fast-v1"
+    for key, expected in (("syntheticOnly", True), ("advisoryOnly", True), ("runtimeGpuRequired", False), ("runtimeExternalServiceRequired", False), ("autonomousActionsAllowed", False), ("deterministicRulesAuthoritative", True)):
+        assert command_center[key] is expected
+    root_html = render_root_with_design_system()
+    assert 'data-ui-version="coherent-fast-v1"' in root_html
+    assert "/command-center" in root_html
     from case_walkthroughs_v2 import get_case_walkthroughs_payload, render_case_walkthroughs_html
     from fault_atlas_v2 import get_fault_atlas_payload, render_fault_atlas_html
     from judge_evidence_pack_v2 import get_judge_evidence_pack_payload, render_judge_evidence_pack_html
@@ -1747,7 +1743,7 @@ def self_check() -> None:
         assert title in rendered
         assert "Synthetic-only" in rendered
         assert "Advisory-only" in rendered
-    for label in ("Judge Pack", "Fault Atlas", "Case Walkthroughs", "Large-Scale Data Lab"):
+    for label in ("Start Demo", "Judge Pack", "Fault Atlas", "Large Scale Data Lab"):
         assert label in command_center_html
     from demo_script_qna_v2 import get_demo_script_final_payload, get_judge_qna_payload, render_demo_script_qna_html
     from final_freeze_v2 import get_final_freeze_payload, render_final_freeze_html
@@ -1795,7 +1791,7 @@ def self_check() -> None:
         assert title in rendered
         assert "Synthetic-only" in rendered
         assert "Advisory-only" in rendered
-    for label in ("Final Route Manifest", "Submission Readiness", "Demo Script", "Visual Polish", "Final Freeze"):
+    for label in ("Final Route Manifest", "Submission", "Final Freeze"):
         assert label in command_center_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"

@@ -4,6 +4,7 @@ import html
 from typing import Any
 
 from algorithm_console_v2 import get_algorithm_console_payload
+from ui_design_system_v2 import unified_page
 
 PHASE = "Phase 44 - Submission Readiness Pack"
 LIVE_URL = "https://coldchain-sentinel-35ex.onrender.com"
@@ -32,6 +33,7 @@ def get_submission_copy_payload() -> dict[str, Any]:
     return _copy()
 
 
+@unified_page
 def render_submission_readiness_html() -> str:
     payload = get_submission_readiness_payload(); checklist = get_submission_checklist_payload()
     blocks = "".join(f'<section><h2>{html.escape(label)}</h2><p>{html.escape(payload[key])}</p></section>' for label, key in (("One-line description", "oneLineDescription"), ("Short description", "shortDescription"), ("Long description", "longDescription")))

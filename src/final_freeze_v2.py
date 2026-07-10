@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 from typing import Any
+from ui_design_system_v2 import unified_page
 
 PHASE = "Phase 47 - Final Freeze"
 LIVE_COMMIT = "510e909e2330b887ced0ff7061a5b9f465472499"
@@ -15,6 +16,7 @@ def get_owner_freeze_decision_payload() -> dict[str, Any]:
     return {"phase": PHASE, "ownerFreezeDecisionRequired": True, "demoFreezeActive": False, "decisionOptions": ["HOLD", "FREEZE_AFTER_LIVE_QA", "REOPEN_FOR_FIXES"], "currentRecommendation": "HOLD until final live QA passes after this commit is deployed", "signoffBoundary": "Only the owner can record a freeze decision after manual deployment and live QA. This route does not change application state."}
 
 
+@unified_page
 def render_final_freeze_html() -> str:
     payload = get_final_freeze_payload()
     checklist = "".join(f"<li>{html.escape(item)}</li>" for item in payload["ownerChecklist"])

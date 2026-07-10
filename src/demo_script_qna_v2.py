@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 from typing import Any
+from ui_design_system_v2 import unified_page
 
 PHASE = "Phase 45 - Demo Script and Judge Q&A"
 ROUTE_ORDER = ["/command-center", "/algorithm-console", "/case-walkthroughs/door-open-warming", "/fault-atlas", "/judge-pack", "/submission-readiness"]
@@ -45,6 +46,7 @@ def get_judge_qna_payload() -> dict[str, Any]:
     return {"phase": PHASE, "syntheticOnly": True, "advisoryOnly": True, "questions": [{"question": question, "answer": answer} for question, answer in qa]}
 
 
+@unified_page
 def render_demo_script_qna_html() -> str:
     scripts = get_demo_script_final_payload(); qna = get_judge_qna_payload(); guide = get_safe_claims_guide_payload()
     script_rows = "".join(f'<section><h2>{html.escape(name)}</h2><p>{html.escape(text)}</p></section>' for name, text in scripts["scripts"].items())
