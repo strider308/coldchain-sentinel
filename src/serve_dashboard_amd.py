@@ -343,6 +343,10 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "decisionSimulator": "/decision-simulator",
         "partnerApiContract": "/partner-api-contract",
         "demoFlow": "/demo-flow",
+        "demoNavigation": "/demo-navigation",
+        "navigationMap": "/navigation-map",
+        "demoFreeze": "/demo-freeze",
+        "finalDemoChecklist": "/final-demo-checklist",
     })
     return payload
 
@@ -379,6 +383,8 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/decision-simulator">Decision Simulator</a>
         <a class="button" href="/partner-api-contract">Partner API Contract</a>
         <a class="button" href="/demo-flow">Demo Flow</a>
+        <a class="button" href="/demo-navigation">Demo Navigation</a>
+        <a class="button" href="/demo-freeze">Demo Freeze</a>
       </div>
     </section>
 """
@@ -410,6 +416,25 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phases 31-32 - demo freeze gate and navigation polish
+        phase3132_path = self.path.split("?", 1)[0]
+        if phase3132_path in (
+            "/demo-freeze", "/demo-freeze.json", "/final-demo-checklist", "/final-demo-checklist.json",
+            "/demo-navigation", "/demo-navigation.json", "/navigation-map", "/navigation-map.json",
+        ):
+            import json as phase3132_json
+            from demo_freeze_gate_v2 import get_demo_freeze_gate_payload, render_demo_freeze_gate_html
+            from demo_navigation_v2 import get_demo_navigation_payload, render_demo_navigation_html
+            if phase3132_path in ("/demo-freeze", "/final-demo-checklist"):
+                body, content_type = render_demo_freeze_gate_html(), "text/html; charset=utf-8"
+            elif phase3132_path in ("/demo-freeze.json", "/final-demo-checklist.json"):
+                body, content_type = phase3132_json.dumps(get_demo_freeze_gate_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif phase3132_path in ("/demo-navigation", "/navigation-map"):
+                body, content_type = render_demo_navigation_html(), "text/html; charset=utf-8"
+            else:
+                body, content_type = phase3132_json.dumps(get_demo_navigation_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            self.send_response(200); self.send_header("Content-Type", content_type); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body.encode("utf-8")); return
+
         # Phases 29-30 - static partner contract and guided demo flow
         phase2930_path = self.path.split("?", 1)[0]
         phase2930_exact = {
@@ -1328,6 +1353,32 @@ def self_check() -> None:
     assert "Presenter script" in render_demo_step_html(1)
     assert "no operational action" in render_demo_step_html(1)
     assert "Step 14" in render_demo_step_html(14)
+    from demo_freeze_gate_v2 import get_demo_freeze_gate_payload, get_final_demo_checklist_payload, render_demo_freeze_gate_html
+    from demo_navigation_v2 import get_demo_navigation_payload, get_navigation_map_payload, render_demo_navigation_html
+    freeze_gate = get_demo_freeze_gate_payload()
+    navigation = get_demo_navigation_payload()
+    for payload, expected_phase in (
+        (freeze_gate, "Phase 31 - Final Demo QA Freeze Gate"),
+        (navigation, "Phase 32 - UI Polish Demo Navigation Pass"),
+    ):
+        assert payload["phase"] == expected_phase
+        assert payload["syntheticOnly"] is True
+        assert payload["advisoryOnly"] is True
+        assert payload["runtimeGpuRequired"] is False
+        assert payload["runtimeExternalServiceRequired"] is False
+        assert payload["deterministicRulesAuthoritative"] is True
+        assert payload["autonomousActionsAllowed"] is False
+    assert get_final_demo_checklist_payload() == freeze_gate
+    assert freeze_gate["demoFreezeActive"] is False
+    assert freeze_gate["ownerFreezeDecisionRequired"] is True
+    assert "Owner freeze decision required" in render_demo_freeze_gate_html()
+    assert "not production validation" in render_demo_freeze_gate_html()
+    assert get_navigation_map_payload() == navigation
+    assert navigation["polishOnly"] is True
+    assert navigation["architectureChanged"] is False
+    assert navigation["dependenciesAdded"] is False
+    assert "Start demo" in render_demo_navigation_html()
+    assert "Freeze gate" in render_demo_navigation_html()
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
