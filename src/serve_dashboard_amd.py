@@ -330,6 +330,8 @@ def command_center_with_amd_json() -> dict[str, Any]:
     payload.setdefault("routeMap", {})["opsReadiness"] = "/ops-readiness"
     payload.setdefault("routeMap", {})["evidenceHealth"] = "/evidence-health.json"
     payload.setdefault("routeMap", {})["productionGapAnalysis"] = "/production-gap-analysis"
+    payload.setdefault("routeMap", {})["expandedBenchmark"] = "/expanded-benchmark"
+    payload.setdefault("routeMap", {})["benchmarkRefresh"] = "/benchmark-refresh"
     return payload
 
 
@@ -355,6 +357,7 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/fireworks-coverage">Fireworks Coverage</a>
         <a class="button" href="/ops-readiness">Ops Readiness</a>
         <a class="button" href="/production-gap-analysis">Gap Analysis</a>
+        <a class="button" href="/expanded-benchmark">Expanded Benchmark</a>
       </div>
     </section>
 """
@@ -386,6 +389,31 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 21 route wiring - expanded synthetic benchmark artifact
+        phase21_path = self.path.split("?", 1)[0]
+        if phase21_path in (
+            "/expanded-benchmark",
+            "/expanded-benchmark.json",
+            "/benchmark-refresh",
+            "/benchmark-refresh.json",
+        ):
+            import json as phase21_json
+            from expanded_benchmark_v2 import get_expanded_benchmark_payload, render_expanded_benchmark_html
+
+            if phase21_path in ("/expanded-benchmark", "/benchmark-refresh"):
+                phase21_body = render_expanded_benchmark_html()
+                phase21_type = "text/html; charset=utf-8"
+            else:
+                phase21_body = phase21_json.dumps(get_expanded_benchmark_payload(), indent=2, sort_keys=True)
+                phase21_type = "application/json; charset=utf-8"
+
+            self.send_response(200)
+            self.send_header("Content-Type", phase21_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(phase21_body.encode("utf-8"))
+            return
+
         # Phase 19/20 route wiring - static evidence health and gap analysis
         phase1920_path = self.path.split("?", 1)[0]
         if phase1920_path in (
@@ -1112,6 +1140,20 @@ def self_check() -> None:
     assert gap_analysis["readinessBoundary"]["requiresHumanReview"] is True
     assert gap_analysis["readinessBoundary"]["requiresExternalExpertReview"] is True
     assert "Demo evidence exists; real deployment requires additional validation and review." in gap_html
+    from expanded_benchmark_v2 import get_expanded_benchmark_payload, render_expanded_benchmark_html
+    expanded_benchmark = get_expanded_benchmark_payload()
+    expanded_html = render_expanded_benchmark_html()
+    assert expanded_benchmark["phase"] == "Phase 21 - Expanded Synthetic Benchmark Refresh"
+    assert expanded_benchmark["artifactAvailable"] is True
+    assert expanded_benchmark["syntheticOnly"] is True
+    assert expanded_benchmark["advisoryOnly"] is True
+    assert expanded_benchmark["runtimeGpuRequired"] is False
+    assert expanded_benchmark["runtimeExternalServiceRequired"] is False
+    assert expanded_benchmark["deterministicRulesAuthoritative"] is True
+    assert expanded_benchmark["autonomousActionsAllowed"] is False
+    assert len(expanded_benchmark["scenarioCoverage"]) >= 14
+    assert expanded_benchmark["trainingBenchmark"]
+    assert "GPU/Jupyter was used offline only." in expanded_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]

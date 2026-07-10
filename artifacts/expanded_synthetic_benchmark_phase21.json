@@ -1,0 +1,250 @@
+{
+  "advisoryOnly": true,
+  "autonomousActionsAllowed": false,
+  "benchmarkComparison": [
+    {
+      "accuracy": 0.6736,
+      "confusionMatrix": {
+        "fn": 3648,
+        "fp": 922,
+        "tn": 7078,
+        "tp": 2352
+      },
+      "f1": 0.5072,
+      "name": "simple_temperature_threshold",
+      "precision": 0.7184,
+      "recall": 0.392
+    },
+    {
+      "accuracy": 0.8061,
+      "confusionMatrix": {
+        "fn": 2715,
+        "fp": 0,
+        "tn": 8000,
+        "tp": 3285
+      },
+      "f1": 0.7076,
+      "name": "slope_baseline",
+      "precision": 1.0,
+      "recall": 0.5475
+    },
+    {
+      "accuracy": 0.7634,
+      "confusionMatrix": {
+        "fn": 3312,
+        "fp": 0,
+        "tn": 8000,
+        "tp": 2688
+      },
+      "f1": 0.6188,
+      "name": "sers_style_synthetic_scorer",
+      "precision": 1.0,
+      "recall": 0.448
+    }
+  ],
+  "complianceCertified": false,
+  "dataset": {
+    "rawDataCommitted": false,
+    "readingsPerWindow": 16,
+    "scenarioFamilies": [
+      "no_excursion_control",
+      "single_sensor_spike",
+      "multi_sensor_confirmed_warming",
+      "unresolved_mapping_risk",
+      "door_open_warming",
+      "dropout_weak_signal",
+      "borderline_warming",
+      "multi_zone_conflict",
+      "sensor_drift_over_time",
+      "gateway_delay",
+      "battery_degradation",
+      "humidity_anomaly",
+      "late_arriving_data",
+      "mixed_quality_evidence"
+    ],
+    "seed": 210421,
+    "syntheticRows": 14000
+  },
+  "deterministicRulesAuthoritative": true,
+  "environment": {
+    "platform": "Linux-6.8.0-79-generic-x86_64-with-glibc2.35",
+    "pythonVersion": "3.10.12"
+  },
+  "generatedAtUtc": "2026-07-10T04:57:12.839102+00:00",
+  "pharmaValidated": false,
+  "phase": "Phase 21 - Expanded Synthetic Benchmark Refresh",
+  "productionValidated": false,
+  "realCustomerDataUsed": false,
+  "realShipmentDataUsed": false,
+  "realWorldValidated": false,
+  "runtimeExternalServiceRequired": false,
+  "runtimeGpuRequired": false,
+  "safetyBoundaries": {
+    "advisoryOnly": true,
+    "autonomousActionsAllowed": false,
+    "deterministicRulesAuthoritative": true,
+    "fireworksRequired": false,
+    "liveAppRequiresGpu": false,
+    "notClaimed": [
+      "operation readiness",
+      "regulated pharma validation",
+      "real deployment validation",
+      "compliance signoff",
+      "release/quarantine/discard/reroute decisions",
+      "customer messaging decisions",
+      "specific GPU model advantage beyond observed synthetic timing"
+    ],
+    "syntheticOnly": true
+  },
+  "scenarioCoverage": [
+    {
+      "avgSersStyleScore": 2.624,
+      "maxSersStyleScore": 6.927,
+      "minSersStyleScore": 0.261,
+      "positiveRate": 0.0,
+      "rows": 1000,
+      "scenario": "no_excursion_control"
+    },
+    {
+      "avgSersStyleScore": 14.578,
+      "maxSersStyleScore": 35.97,
+      "minSersStyleScore": 0,
+      "positiveRate": 0.0,
+      "rows": 1000,
+      "scenario": "single_sensor_spike"
+    },
+    {
+      "avgSersStyleScore": 73.334,
+      "maxSersStyleScore": 97.808,
+      "minSersStyleScore": 47.763,
+      "positiveRate": 1.0,
+      "rows": 1000,
+      "scenario": "multi_sensor_confirmed_warming"
+    },
+    {
+      "avgSersStyleScore": 2.658,
+      "maxSersStyleScore": 6.299,
+      "minSersStyleScore": 0.325,
+      "positiveRate": 0.0,
+      "rows": 1000,
+      "scenario": "unresolved_mapping_risk"
+    },
+    {
+      "avgSersStyleScore": 70.189,
+      "maxSersStyleScore": 100,
+      "minSersStyleScore": 41.723,
+      "positiveRate": 1.0,
+      "rows": 1000,
+      "scenario": "door_open_warming"
+    },
+    {
+      "avgSersStyleScore": 11.288,
+      "maxSersStyleScore": 24.942,
+      "minSersStyleScore": 5.089,
+      "positiveRate": 0.0,
+      "rows": 1000,
+      "scenario": "dropout_weak_signal"
+    },
+    {
+      "avgSersStyleScore": 27.346,
+      "maxSersStyleScore": 46.615,
+      "minSersStyleScore": 10.713,
+      "positiveRate": 1.0,
+      "rows": 1000,
+      "scenario": "borderline_warming"
+    },
+    {
+      "avgSersStyleScore": 5.579,
+      "maxSersStyleScore": 17.814,
+      "minSersStyleScore": 0.322,
+      "positiveRate": 0.0,
+      "rows": 1000,
+      "scenario": "multi_zone_conflict"
+    },
+    {
+      "avgSersStyleScore": 20.66,
+      "maxSersStyleScore": 40.651,
+      "minSersStyleScore": 8.449,
+      "positiveRate": 1.0,
+      "rows": 1000,
+      "scenario": "sensor_drift_over_time"
+    },
+    {
+      "avgSersStyleScore": 5.537,
+      "maxSersStyleScore": 11.395,
+      "minSersStyleScore": 1.69,
+      "positiveRate": 0.0,
+      "rows": 1000,
+      "scenario": "gateway_delay"
+    },
+    {
+      "avgSersStyleScore": 9.14,
+      "maxSersStyleScore": 15.951,
+      "minSersStyleScore": 5.53,
+      "positiveRate": 0.0,
+      "rows": 1000,
+      "scenario": "battery_degradation"
+    },
+    {
+      "avgSersStyleScore": 9.004,
+      "maxSersStyleScore": 14.089,
+      "minSersStyleScore": 5.931,
+      "positiveRate": 1.0,
+      "rows": 1000,
+      "scenario": "humidity_anomaly"
+    },
+    {
+      "avgSersStyleScore": 5.965,
+      "maxSersStyleScore": 13.837,
+      "minSersStyleScore": 1.832,
+      "positiveRate": 0.0,
+      "rows": 1000,
+      "scenario": "late_arriving_data"
+    },
+    {
+      "avgSersStyleScore": 50.643,
+      "maxSersStyleScore": 80.7,
+      "minSersStyleScore": 25.357,
+      "positiveRate": 1.0,
+      "rows": 1000,
+      "scenario": "mixed_quality_evidence"
+    }
+  ],
+  "status": "BENCHMARK_REFRESHED",
+  "syntheticOnly": true,
+  "torch": {
+    "available": true,
+    "cudaAvailable": true,
+    "device": "cuda",
+    "deviceCount": 1,
+    "deviceName": "",
+    "version": "2.9.1+gitff65f5b"
+  },
+  "trainingBenchmark": {
+    "advisoryOnly": true,
+    "benchmarkType": "expanded synthetic tensor training loop",
+    "claimScope": "CPU/GPU timing comparison on expanded synthetic data only",
+    "cpuResult": {
+      "device": "cpu",
+      "epochs": 100,
+      "finalLoss": 0.024243,
+      "testAccuracy": 0.9932,
+      "testRows": 2800,
+      "trainRows": 11200,
+      "trainSeconds": 3.088
+    },
+    "gpuAvailable": true,
+    "gpuResult": {
+      "device": "cuda",
+      "epochs": 100,
+      "finalLoss": 0.020696,
+      "testAccuracy": 0.9936,
+      "testRows": 2800,
+      "trainRows": 11200,
+      "trainSeconds": 0.6861
+    },
+    "speedupRatio": 4.5008,
+    "status": "COMPLETE_CPU_GPU_EXPANDED_SYNTHETIC_BENCHMARK",
+    "syntheticOnly": true
+  }
+}
