@@ -304,8 +304,10 @@ def render_gpu_benchmark_plan() -> str:
 
 
 def command_center_with_amd_json() -> dict[str, Any]:
+    from dashboard_strategy_v2 import get_dashboard_strategy_payload
     payload = command_center_payload()
     amd = amd_acceleration_json()
+    strategy = get_dashboard_strategy_payload()
     payload["amdAccelerationSummary"] = {
         "amdGpuEvidenceStatus": amd["amdGpuEvidenceStatus"],
         "amdGpuVerified": amd["amdGpuVerified"],
@@ -314,6 +316,13 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "speedupRatio": amd["speedupRatio"],
         "specificGpuModelClaimed": False,
         "claimsScope": amd["amdClaimsScope"],
+    }
+    payload["dashboardStrategySummary"] = {
+        "sentinelReadinessScore": strategy["sentinelReadinessScore"],
+        "evidenceConfidencePulse": strategy["evidenceConfidencePulse"],
+        "whatNext": strategy["whatNext"],
+        "demoHighlights": strategy["demoHighlights"],
+        "whyLayer": strategy["whyLayer"],
     }
     payload.setdefault("routeMap", {})["amdAcceleration"] = "/amd-acceleration"
     payload.setdefault("routeMap", {})["gpuBenchmarkPlan"] = "/gpu-benchmark-plan"
@@ -347,13 +356,30 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "navigationMap": "/navigation-map",
         "demoFreeze": "/demo-freeze",
         "finalDemoChecklist": "/final-demo-checklist",
+        "dashboardStrategy": "/dashboard-strategy",
+        "screenshotWorthyDashboard": "/screenshot-worthy-dashboard",
     })
     return payload
 
 
 def render_command_center_with_amd() -> str:
+    from dashboard_strategy_v2 import get_dashboard_strategy_payload
     payload = amd_acceleration_json()
+    strategy = get_dashboard_strategy_payload()
     speedup = f'{_fmt(payload["speedupRatio"])}x' if payload.get("speedupRatio") else "pending"
+    score = strategy["sentinelReadinessScore"]
+    next_links = "".join(
+        f'<a class="button" href="{html.escape(item["targetRoute"])}">{html.escape(item["action"])}</a>'
+        for item in strategy["whatNext"][:3]
+    )
+    strategy_card = f"""
+    <section class="panel" data-testid="dashboard-strategy-card" style="border-left:6px solid #146c5f;background:#eef9f6">
+      <div class="grid">
+        <article><p class="muted">Product home screen</p><h2>ColdChain Sentinel</h2><p>From noisy synthetic evidence to clear advisory signals, safe fallbacks, and human-review next steps.</p><div class="toolbar"><a class="button" href="/dashboard-strategy">Dashboard Strategy</a><a class="button" href="/screenshot-worthy-dashboard">Screenshot-Worthy Dashboard</a>{next_links}</div></article>
+        <article><h2>{html.escape(score["label"])}</h2><p class="metric">{score["score"]}</p><p>{html.escape(score["band"])}. {html.escape(score["meaning"])}</p><p class="muted">Synthetic advisory metric. Not an operational score.</p></article>
+      </div>
+    </section>
+"""
     card = f"""
     <section class="panel" data-testid="amd-acceleration-card">
       <h2>AMD GPU Evidence</h2>
@@ -385,10 +411,13 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/demo-flow">Demo Flow</a>
         <a class="button" href="/demo-navigation">Demo Navigation</a>
         <a class="button" href="/demo-freeze">Demo Freeze</a>
+        <a class="button" href="/dashboard-strategy">Dashboard Strategy</a>
+        <a class="button" href="/screenshot-worthy-dashboard">Screenshot-Worthy Dashboard</a>
       </div>
     </section>
 """
-    return render_command_center().replace("</main>", card + "  </main>")
+    command_center = render_command_center().replace("<main>", "<main>" + strategy_card, 1)
+    return command_center.replace("</main>", card + "  </main>")
 
 
 def system_status_with_amd_json() -> dict[str, Any]:
@@ -416,6 +445,20 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phase 33 - screenshot-worthy command center strategy
+        phase33_path = self.path.split("?", 1)[0]
+        if phase33_path in (
+            "/dashboard-strategy", "/dashboard-strategy.json", "/screenshot-worthy-dashboard",
+            "/screenshot-worthy-dashboard.json", "/command-center-strategy.json",
+        ):
+            import json as phase33_json
+            from dashboard_strategy_v2 import get_dashboard_strategy_payload, render_dashboard_strategy_html
+            if phase33_path in ("/dashboard-strategy", "/screenshot-worthy-dashboard"):
+                body, content_type = render_dashboard_strategy_html(), "text/html; charset=utf-8"
+            else:
+                body, content_type = phase33_json.dumps(get_dashboard_strategy_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            self.send_response(200); self.send_header("Content-Type", content_type); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body.encode("utf-8")); return
+
         # Phases 31-32 - demo freeze gate and navigation polish
         phase3132_path = self.path.split("?", 1)[0]
         if phase3132_path in (
@@ -1379,6 +1422,26 @@ def self_check() -> None:
     assert navigation["dependenciesAdded"] is False
     assert "Start demo" in render_demo_navigation_html()
     assert "Freeze gate" in render_demo_navigation_html()
+    from dashboard_strategy_v2 import get_dashboard_strategy_payload, render_dashboard_strategy_html
+    dashboard_strategy = get_dashboard_strategy_payload()
+    strategy_html = render_dashboard_strategy_html()
+    assert dashboard_strategy["phase"] == "Phase 33 - Screenshot-Worthy Command Center Upgrade"
+    assert dashboard_strategy["syntheticOnly"] is True
+    assert dashboard_strategy["advisoryOnly"] is True
+    assert dashboard_strategy["runtimeGpuRequired"] is False
+    assert dashboard_strategy["runtimeExternalServiceRequired"] is False
+    assert dashboard_strategy["deterministicRulesAuthoritative"] is True
+    assert dashboard_strategy["autonomousActionsAllowed"] is False
+    assert dashboard_strategy["dependenciesAdded"] is False
+    assert dashboard_strategy["architectureChanged"] is False
+    assert dashboard_strategy["syntheticLiveView"]["liveDataClaimed"] is False
+    assert dashboard_strategy["syntheticLiveView"]["syntheticActivityOnly"] is True
+    assert dashboard_strategy["whyLayer"]["noExternalCallFromDashboard"] is True
+    assert dashboard_strategy["sentinelReadinessScore"]
+    assert dashboard_strategy["whatNext"]
+    assert dashboard_strategy["screenshotWorthyChecklist"]
+    for required_text in ("Sentinel Readiness Score", "What Next?", "Synthetic Live View", "Fireworks optional", "Deterministic rules authoritative"):
+        assert required_text in strategy_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
