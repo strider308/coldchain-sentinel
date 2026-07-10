@@ -101,6 +101,8 @@ def get_command_center_algorithm_payload() -> dict[str, Any]:
             "productionGapAnalysis": "/production-gap-analysis",
             "judgePack": "/judge-pack", "largeScaleDataLab": "/large-scale-data-lab",
             "faultAtlas": "/fault-atlas", "caseWalkthroughs": "/case-walkthroughs",
+            "finalRouteManifest": "/final-route-manifest", "submissionReadiness": "/submission-readiness",
+            "demoScriptFinal": "/demo-script-final", "visualPolish": "/visual-polish", "finalFreeze": "/final-freeze",
         },
     }
 

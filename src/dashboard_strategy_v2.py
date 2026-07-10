@@ -127,6 +127,8 @@ def get_dashboard_strategy_payload() -> dict[str, Any]:
             "behaviorPredictor": "/behavior-predictor", "inspectionEngine": "/inspection-engine",
             "judgePack": "/judge-pack", "largeScaleDataLab": "/large-scale-data-lab",
             "faultAtlas": "/fault-atlas", "caseWalkthroughs": "/case-walkthroughs",
+            "finalRouteManifest": "/final-route-manifest", "submissionReadiness": "/submission-readiness",
+            "demoScriptFinal": "/demo-script-final", "visualPolish": "/visual-polish", "finalFreeze": "/final-freeze",
         },
     }
 

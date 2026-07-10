@@ -86,7 +86,7 @@ def get_judge_evidence_pack_payload() -> dict[str, Any]:
         "headlineMetrics": metrics,
         "evidenceHighlights": ["synthetic sensor evidence", "data quality pipeline", "consensus guardrails", "SERS advisory risk", "STBL behavior prediction", "root cause inspection", "algorithm console", "command center integration", "partner/API readiness", "production gap honesty"],
         "limitations": ["synthetic-only", "no external-world validation", "no operational disposition", "no regulated or compliance claim", "no real customer integration"],
-        "routeMap": {"judgePack": "/judge-pack", "demoScript": "/judge-pack/demo-script.json", "technicalProof": "/judge-pack/technical-proof.json", "claimsBoundary": "/judge-pack/claims-boundary.json", **{title.replace(" ", "").lower(): route for title, route, _ in TOP_ROUTES}},
+        "routeMap": {"judgePack": "/judge-pack", "demoScript": "/judge-pack/demo-script.json", "technicalProof": "/judge-pack/technical-proof.json", "claimsBoundary": "/judge-pack/claims-boundary.json", "finalRouteManifest": "/final-route-manifest", "submissionReadiness": "/submission-readiness", "demoScriptFinal": "/demo-script-final", "visualPolish": "/visual-polish", "demoFreeze": "/demo-freeze", "finalFreeze": "/final-freeze", **{title.replace(" ", "").lower(): route for title, route, _ in TOP_ROUTES}},
     }
 
 

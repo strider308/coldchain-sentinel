@@ -377,6 +377,11 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "largeScaleDataLab": "/large-scale-data-lab",
         "faultAtlas": "/fault-atlas",
         "caseWalkthroughs": "/case-walkthroughs",
+        "finalRouteManifest": "/final-route-manifest",
+        "submissionReadiness": "/submission-readiness",
+        "demoScriptFinal": "/demo-script-final",
+        "visualPolish": "/visual-polish",
+        "finalFreeze": "/final-freeze",
     })
     return payload
 
@@ -403,7 +408,7 @@ def render_command_center_with_amd() -> str:
       <p class="metric">{algorithm["headlineMetrics"]["trainingRows"]:,}</p>
       <p>Synthetic training rows. The distilled stdlib runtime predicts likely behavior and the first human inspection target.</p>
       <h3>What to inspect next</h3>
-      <div class="toolbar"><a class="button" href="/algorithm-console">Algorithm Console</a><a class="button" href="/behavior-predictor">Behavior Predictor</a><a class="button" href="/inspection-engine">Inspection Engine</a><a class="button" href="/command-center-algorithm">Algorithm Insights</a><a class="button" href="/judge-pack">Judge Pack</a><a class="button" href="/fault-atlas">Fault Atlas</a><a class="button" href="/case-walkthroughs">Case Walkthroughs</a><a class="button" href="/large-scale-data-lab">Large-Scale Data Lab</a><a class="button" href="/what-to-inspect-next.json">What to inspect</a>{inspect_links}</div>
+      <div class="toolbar"><a class="button" href="/algorithm-console">Algorithm Console</a><a class="button" href="/behavior-predictor">Behavior Predictor</a><a class="button" href="/inspection-engine">Inspection Engine</a><a class="button" href="/command-center-algorithm">Algorithm Insights</a><a class="button" href="/judge-pack">Judge Pack</a><a class="button" href="/fault-atlas">Fault Atlas</a><a class="button" href="/case-walkthroughs">Case Walkthroughs</a><a class="button" href="/large-scale-data-lab">Large-Scale Data Lab</a><a class="button" href="/final-route-manifest">Final Route Manifest</a><a class="button" href="/submission-readiness">Submission Readiness</a><a class="button" href="/demo-script-final">Demo Script</a><a class="button" href="/visual-polish">Visual Polish</a><a class="button" href="/final-freeze">Final Freeze</a><a class="button" href="/what-to-inspect-next.json">What to inspect</a>{inspect_links}</div>
     </section>
 """
     strategy_card = f"""
@@ -487,6 +492,45 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phases 43-47 - final submission readiness and owner freeze decision
+        final_path = self.path.split("?", 1)[0]
+        final_routes = {
+            "/final-route-manifest", "/final-route-manifest.json", "/live-qa-checklist",
+            "/live-qa-checklist.json", "/live-validation-script.ps1", "/submission-readiness",
+            "/submission-readiness.json", "/submission-checklist", "/submission-checklist.json",
+            "/submission-copy.json", "/demo-script-final", "/demo-script-final.json", "/judge-qna",
+            "/judge-qna.json", "/safe-claims-guide.json", "/visual-polish", "/visual-polish.json",
+            "/screenshot-checklist", "/screenshot-checklist.json", "/screenshot-route-map.json",
+            "/final-freeze", "/final-freeze.json", "/owner-freeze-decision.json",
+        }
+        if final_path in final_routes:
+            import json as final_json
+            from demo_script_qna_v2 import get_demo_script_final_payload, get_judge_qna_payload, get_safe_claims_guide_payload, render_demo_script_qna_html
+            from final_freeze_v2 import get_final_freeze_payload, get_owner_freeze_decision_payload, render_final_freeze_html
+            from final_route_manifest_v2 import get_final_route_manifest_payload, get_live_qa_checklist_payload, get_live_validation_script, render_final_route_manifest_html
+            from final_visual_polish_v2 import get_screenshot_checklist_payload, get_screenshot_route_map_payload, get_visual_polish_payload, render_visual_polish_html
+            from submission_readiness_v2 import get_submission_checklist_payload, get_submission_copy_payload, get_submission_readiness_payload, render_submission_readiness_html
+            if final_path in ("/final-route-manifest", "/live-qa-checklist"): body, content_type = render_final_route_manifest_html(), "text/html; charset=utf-8"
+            elif final_path == "/final-route-manifest.json": body, content_type = final_json.dumps(get_final_route_manifest_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path == "/live-qa-checklist.json": body, content_type = final_json.dumps(get_live_qa_checklist_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path == "/live-validation-script.ps1": body, content_type = get_live_validation_script(), "text/plain; charset=utf-8"
+            elif final_path in ("/submission-readiness", "/submission-checklist"): body, content_type = render_submission_readiness_html(), "text/html; charset=utf-8"
+            elif final_path == "/submission-readiness.json": body, content_type = final_json.dumps(get_submission_readiness_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path == "/submission-checklist.json": body, content_type = final_json.dumps(get_submission_checklist_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path == "/submission-copy.json": body, content_type = final_json.dumps(get_submission_copy_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path in ("/demo-script-final", "/judge-qna"): body, content_type = render_demo_script_qna_html(), "text/html; charset=utf-8"
+            elif final_path == "/demo-script-final.json": body, content_type = final_json.dumps(get_demo_script_final_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path == "/judge-qna.json": body, content_type = final_json.dumps(get_judge_qna_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path == "/safe-claims-guide.json": body, content_type = final_json.dumps(get_safe_claims_guide_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path in ("/visual-polish", "/screenshot-checklist"): body, content_type = render_visual_polish_html(), "text/html; charset=utf-8"
+            elif final_path == "/visual-polish.json": body, content_type = final_json.dumps(get_visual_polish_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path == "/screenshot-checklist.json": body, content_type = final_json.dumps(get_screenshot_checklist_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path == "/screenshot-route-map.json": body, content_type = final_json.dumps(get_screenshot_route_map_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            elif final_path == "/final-freeze": body, content_type = render_final_freeze_html(), "text/html; charset=utf-8"
+            elif final_path == "/final-freeze.json": body, content_type = final_json.dumps(get_final_freeze_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            else: body, content_type = final_json.dumps(get_owner_freeze_decision_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            self.send_response(200); self.send_header("Content-Type", content_type); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body.encode("utf-8")); return
+
         # Phases 39-42 - judge evidence, scale profiles, fault atlas, and walkthroughs
         evidence_path = self.path.split("?", 1)[0]
         evidence_exact = {
@@ -1704,6 +1748,54 @@ def self_check() -> None:
         assert "Synthetic-only" in rendered
         assert "Advisory-only" in rendered
     for label in ("Judge Pack", "Fault Atlas", "Case Walkthroughs", "Large-Scale Data Lab"):
+        assert label in command_center_html
+    from demo_script_qna_v2 import get_demo_script_final_payload, get_judge_qna_payload, render_demo_script_qna_html
+    from final_freeze_v2 import get_final_freeze_payload, render_final_freeze_html
+    from final_route_manifest_v2 import get_final_route_manifest_payload, render_final_route_manifest_html
+    from final_visual_polish_v2 import get_visual_polish_payload, render_visual_polish_html
+    from submission_readiness_v2 import get_submission_readiness_payload, render_submission_readiness_html
+    final_payloads = (
+        get_final_route_manifest_payload(), get_submission_readiness_payload(),
+        get_demo_script_final_payload(), get_visual_polish_payload(), get_final_freeze_payload(),
+    )
+    assert [item["phase"] for item in final_payloads] == [
+        "Phase 43 - Final Route Manifest and Live QA Sweep",
+        "Phase 44 - Submission Readiness Pack",
+        "Phase 45 - Demo Script and Judge Q&A",
+        "Phase 46 - Visual Polish and Screenshot Pass",
+        "Phase 47 - Final Freeze",
+    ]
+    for payload in final_payloads:
+        assert payload["syntheticOnly"] is True
+        assert payload["advisoryOnly"] is True
+        assert payload.get("realWorldDataUsed", False) is False
+        assert payload["runtimeGpuRequired"] is False
+        assert payload["runtimeExternalServiceRequired"] is False
+        assert payload["runtimePyTorchRequired"] is False
+        assert payload["deterministicRulesAuthoritative"] is True
+        assert payload["autonomousActionsAllowed"] is False
+        assert payload["externalCallsRequired"] is False
+        assert payload["dependenciesAdded"] is False
+    assert len(final_payloads[0]["requiredRoutes"]) >= 35
+    assert final_payloads[1]["ownerSubmissionRequired"] is True
+    assert len(get_judge_qna_payload()["questions"]) >= 18
+    assert final_payloads[3]["polishOnly"] is True
+    assert final_payloads[3]["architectureChanged"] is False
+    assert final_payloads[4]["ownerFreezeDecisionRequired"] is True
+    assert final_payloads[4]["demoFreezeActive"] is False
+    assert final_payloads[4]["automaticFreezeEnabled"] is False
+    final_html = (
+        render_final_route_manifest_html(), render_submission_readiness_html(),
+        render_demo_script_qna_html(), render_visual_polish_html(), render_final_freeze_html(),
+    )
+    for rendered, title in zip(final_html, (
+        "Final Route Manifest", "Submission Readiness Pack", "Demo Script and Judge Q&amp;A",
+        "Visual Polish and Screenshot Pass", "Final Freeze",
+    )):
+        assert title in rendered
+        assert "Synthetic-only" in rendered
+        assert "Advisory-only" in rendered
+    for label in ("Final Route Manifest", "Submission Readiness", "Demo Script", "Visual Polish", "Final Freeze"):
         assert label in command_center_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
