@@ -1,0 +1,918 @@
+{
+  "phase": "Phase 35A - Jupyter GPU Sentinel Thermal Behavior Learner Training",
+  "algorithmName": "STBL - Sentinel Thermal Behavior Learner",
+  "device": "cuda",
+  "cudaAvailable": true,
+  "syntheticOnly": true,
+  "advisoryOnly": true,
+  "realWorldDataUsed": false,
+  "realCustomerDataUsed": false,
+  "realShipmentDataUsed": false,
+  "runtimeGpuRequired": false,
+  "runtimeExternalServiceRequired": false,
+  "productionValidated": false,
+  "pharmaValidated": false,
+  "realWorldValidated": false,
+  "complianceCertified": false,
+  "autonomousActionsAllowed": false,
+  "deterministicRulesAuthoritative": true,
+  "status": "TRAINED_OFFLINE_SYNTHETIC_10X",
+  "generatedAtUtc": "2026-07-10T09:49:53.857342+00:00",
+  "datasetSummary": {
+    "rowsPerFault": 4500,
+    "totalRows": 171000,
+    "faultClassCount": 38,
+    "behaviorClassCount": 7,
+    "difficultyCounts": {
+      "medium": 57000,
+      "severe": 57000,
+      "subtle": 57000
+    },
+    "faultCounts": {
+      "duplicate_readings": 4500,
+      "hot_wall_or_roof_exposure": 4500,
+      "tilt_event": 4500,
+      "low_battery": 4500,
+      "thermal_stratification": 4500,
+      "mixed_quality_evidence": 4500,
+      "stuck_sensor": 4500,
+      "calibration_offset": 4500,
+      "door_open_warming": 4500,
+      "single_sensor_false_spike": 4500,
+      "pallet_zone_mapping_conflict": 4500,
+      "dropout_window": 4500,
+      "impossible_physics": 4500,
+      "firmware_mismatch": 4500,
+      "slow_warming": 4500,
+      "reefer_setpoint_mismatch": 4500,
+      "humidity_anomaly": 4500,
+      "weak_signal": 4500,
+      "shock_event": 4500,
+      "clock_drift": 4500,
+      "sequence_reset": 4500,
+      "cooling_or_freezing_risk": 4500,
+      "gateway_delay": 4500,
+      "rapid_temperature_spike": 4500,
+      "reefer_alarm_active": 4500,
+      "sensor_drift": 4500,
+      "unresolved_mapping_risk": 4500,
+      "container_mismatch": 4500,
+      "sensor_id_collision": 4500,
+      "condensation_risk": 4500,
+      "normal_stable": 4500,
+      "out_of_order_readings": 4500,
+      "vibration_event": 4500,
+      "noisy_sensor": 4500,
+      "late_arriving_data": 4500,
+      "multi_sensor_confirmed_warming": 4500,
+      "missing_readings": 4500,
+      "light_exposure": 4500
+    }
+  },
+  "trainingRows": 119699,
+  "validationRows": 25651,
+  "testRows": 25650,
+  "totalRows": 171000,
+  "featureCount": 19,
+  "faultClassCount": 38,
+  "behaviorClassCount": 7,
+  "features": [
+    "temperatureSlopeCPerHour",
+    "temperatureVolatilityC",
+    "sensorDisagreementC",
+    "zoneDisagreementC",
+    "humiditySlopePercentPerHour",
+    "doorOpenCount",
+    "shockEventCount",
+    "tiltEventCount",
+    "lightExposureCount",
+    "weakSignalShare",
+    "lowBatteryShare",
+    "missingReadingCount",
+    "duplicateReadingCount",
+    "outOfOrderCount",
+    "lateArrivalCount",
+    "maxIngestionDelaySeconds",
+    "mappingConfidenceMin",
+    "calibrationOffsetC",
+    "qualityScore"
+  ],
+  "faultLabels": [
+    "normal_stable",
+    "slow_warming",
+    "rapid_temperature_spike",
+    "single_sensor_false_spike",
+    "multi_sensor_confirmed_warming",
+    "cooling_or_freezing_risk",
+    "door_open_warming",
+    "reefer_setpoint_mismatch",
+    "reefer_alarm_active",
+    "thermal_stratification",
+    "hot_wall_or_roof_exposure",
+    "humidity_anomaly",
+    "condensation_risk",
+    "shock_event",
+    "vibration_event",
+    "tilt_event",
+    "light_exposure",
+    "sensor_drift",
+    "calibration_offset",
+    "stuck_sensor",
+    "noisy_sensor",
+    "impossible_physics",
+    "duplicate_readings",
+    "missing_readings",
+    "dropout_window",
+    "out_of_order_readings",
+    "late_arriving_data",
+    "gateway_delay",
+    "weak_signal",
+    "low_battery",
+    "firmware_mismatch",
+    "clock_drift",
+    "sequence_reset",
+    "sensor_id_collision",
+    "pallet_zone_mapping_conflict",
+    "container_mismatch",
+    "mixed_quality_evidence",
+    "unresolved_mapping_risk"
+  ],
+  "behaviorLabels": [
+    "stable",
+    "warming",
+    "cooling",
+    "volatile",
+    "data_quality_fault",
+    "mapping_fault",
+    "evidence_insufficient"
+  ],
+  "trainingHistory": [
+    {
+      "epoch": 1,
+      "loss": 3.01651,
+      "validationFaultAccuracy": 0.7372,
+      "validationBehaviorAccuracy": 0.8792,
+      "elapsedSeconds": 1.96
+    },
+    {
+      "epoch": 10,
+      "loss": 0.17666,
+      "validationFaultAccuracy": 0.942,
+      "validationBehaviorAccuracy": 0.9922,
+      "elapsedSeconds": 13.61
+    },
+    {
+      "epoch": 20,
+      "loss": 0.14748,
+      "validationFaultAccuracy": 0.949,
+      "validationBehaviorAccuracy": 0.9938,
+      "elapsedSeconds": 26.4
+    },
+    {
+      "epoch": 30,
+      "loss": 0.13653,
+      "validationFaultAccuracy": 0.9476,
+      "validationBehaviorAccuracy": 0.9928,
+      "elapsedSeconds": 38.16
+    },
+    {
+      "epoch": 40,
+      "loss": 0.13022,
+      "validationFaultAccuracy": 0.9485,
+      "validationBehaviorAccuracy": 0.9938,
+      "elapsedSeconds": 49.75
+    },
+    {
+      "epoch": 50,
+      "loss": 0.12557,
+      "validationFaultAccuracy": 0.949,
+      "validationBehaviorAccuracy": 0.9947,
+      "elapsedSeconds": 61.35
+    },
+    {
+      "epoch": 60,
+      "loss": 0.12332,
+      "validationFaultAccuracy": 0.9523,
+      "validationBehaviorAccuracy": 0.995,
+      "elapsedSeconds": 72.95
+    },
+    {
+      "epoch": 70,
+      "loss": 0.11985,
+      "validationFaultAccuracy": 0.9526,
+      "validationBehaviorAccuracy": 0.9951,
+      "elapsedSeconds": 84.55
+    },
+    {
+      "epoch": 80,
+      "loss": 0.118,
+      "validationFaultAccuracy": 0.9521,
+      "validationBehaviorAccuracy": 0.9946,
+      "elapsedSeconds": 96.15
+    },
+    {
+      "epoch": 90,
+      "loss": 0.1157,
+      "validationFaultAccuracy": 0.9522,
+      "validationBehaviorAccuracy": 0.9949,
+      "elapsedSeconds": 107.75
+    },
+    {
+      "epoch": 100,
+      "loss": 0.11433,
+      "validationFaultAccuracy": 0.9531,
+      "validationBehaviorAccuracy": 0.9952,
+      "elapsedSeconds": 119.35
+    },
+    {
+      "epoch": 110,
+      "loss": 0.11287,
+      "validationFaultAccuracy": 0.9548,
+      "validationBehaviorAccuracy": 0.9951,
+      "elapsedSeconds": 130.97
+    },
+    {
+      "epoch": 120,
+      "loss": 0.10972,
+      "validationFaultAccuracy": 0.9543,
+      "validationBehaviorAccuracy": 0.9952,
+      "elapsedSeconds": 142.54
+    },
+    {
+      "epoch": 130,
+      "loss": 0.1051,
+      "validationFaultAccuracy": 0.9546,
+      "validationBehaviorAccuracy": 0.9953,
+      "elapsedSeconds": 257.02
+    },
+    {
+      "epoch": 140,
+      "loss": 0.10495,
+      "validationFaultAccuracy": 0.9558,
+      "validationBehaviorAccuracy": 0.9956,
+      "elapsedSeconds": 268.83
+    },
+    {
+      "epoch": 150,
+      "loss": 0.10461,
+      "validationFaultAccuracy": 0.9549,
+      "validationBehaviorAccuracy": 0.9952,
+      "elapsedSeconds": 280.62
+    },
+    {
+      "epoch": 160,
+      "loss": 0.10296,
+      "validationFaultAccuracy": 0.9542,
+      "validationBehaviorAccuracy": 0.9954,
+      "elapsedSeconds": 292.42
+    },
+    {
+      "epoch": 170,
+      "loss": 0.10328,
+      "validationFaultAccuracy": 0.9549,
+      "validationBehaviorAccuracy": 0.9956,
+      "elapsedSeconds": 304.22
+    },
+    {
+      "epoch": 180,
+      "loss": 0.10261,
+      "validationFaultAccuracy": 0.9555,
+      "validationBehaviorAccuracy": 0.9953,
+      "elapsedSeconds": 316.01
+    }
+  ],
+  "finalNeuralMetrics": {
+    "faultAccuracy": 0.9551,
+    "behaviorAccuracy": 0.9952,
+    "testRows": 25650,
+    "finalValidationSnapshot": {
+      "epoch": 180,
+      "loss": 0.10261,
+      "validationFaultAccuracy": 0.9555,
+      "validationBehaviorAccuracy": 0.9953,
+      "elapsedSeconds": 316.01
+    }
+  },
+  "perFaultMetrics": [
+    {
+      "fault": "normal_stable",
+      "testRows": 648,
+      "accuracy": 0.9383
+    },
+    {
+      "fault": "slow_warming",
+      "testRows": 675,
+      "accuracy": 0.9674
+    },
+    {
+      "fault": "rapid_temperature_spike",
+      "testRows": 652,
+      "accuracy": 1.0
+    },
+    {
+      "fault": "single_sensor_false_spike",
+      "testRows": 659,
+      "accuracy": 0.953
+    },
+    {
+      "fault": "multi_sensor_confirmed_warming",
+      "testRows": 679,
+      "accuracy": 0.9057
+    },
+    {
+      "fault": "cooling_or_freezing_risk",
+      "testRows": 676,
+      "accuracy": 0.9985
+    },
+    {
+      "fault": "door_open_warming",
+      "testRows": 668,
+      "accuracy": 1.0
+    },
+    {
+      "fault": "reefer_setpoint_mismatch",
+      "testRows": 669,
+      "accuracy": 0.9193
+    },
+    {
+      "fault": "reefer_alarm_active",
+      "testRows": 672,
+      "accuracy": 0.9152
+    },
+    {
+      "fault": "thermal_stratification",
+      "testRows": 720,
+      "accuracy": 0.9931
+    },
+    {
+      "fault": "hot_wall_or_roof_exposure",
+      "testRows": 679,
+      "accuracy": 0.9912
+    },
+    {
+      "fault": "humidity_anomaly",
+      "testRows": 666,
+      "accuracy": 0.9459
+    },
+    {
+      "fault": "condensation_risk",
+      "testRows": 674,
+      "accuracy": 0.911
+    },
+    {
+      "fault": "shock_event",
+      "testRows": 662,
+      "accuracy": 0.9668
+    },
+    {
+      "fault": "vibration_event",
+      "testRows": 668,
+      "accuracy": 0.9671
+    },
+    {
+      "fault": "tilt_event",
+      "testRows": 679,
+      "accuracy": 0.9971
+    },
+    {
+      "fault": "light_exposure",
+      "testRows": 678,
+      "accuracy": 1.0
+    },
+    {
+      "fault": "sensor_drift",
+      "testRows": 647,
+      "accuracy": 0.8733
+    },
+    {
+      "fault": "calibration_offset",
+      "testRows": 709,
+      "accuracy": 0.8815
+    },
+    {
+      "fault": "stuck_sensor",
+      "testRows": 644,
+      "accuracy": 1.0
+    },
+    {
+      "fault": "noisy_sensor",
+      "testRows": 695,
+      "accuracy": 0.9683
+    },
+    {
+      "fault": "impossible_physics",
+      "testRows": 683,
+      "accuracy": 1.0
+    },
+    {
+      "fault": "duplicate_readings",
+      "testRows": 722,
+      "accuracy": 1.0
+    },
+    {
+      "fault": "missing_readings",
+      "testRows": 658,
+      "accuracy": 0.9985
+    },
+    {
+      "fault": "dropout_window",
+      "testRows": 670,
+      "accuracy": 0.9881
+    },
+    {
+      "fault": "out_of_order_readings",
+      "testRows": 673,
+      "accuracy": 0.9837
+    },
+    {
+      "fault": "late_arriving_data",
+      "testRows": 704,
+      "accuracy": 0.9929
+    },
+    {
+      "fault": "gateway_delay",
+      "testRows": 685,
+      "accuracy": 0.9883
+    },
+    {
+      "fault": "weak_signal",
+      "testRows": 687,
+      "accuracy": 0.9985
+    },
+    {
+      "fault": "low_battery",
+      "testRows": 653,
+      "accuracy": 1.0
+    },
+    {
+      "fault": "firmware_mismatch",
+      "testRows": 687,
+      "accuracy": 0.9738
+    },
+    {
+      "fault": "clock_drift",
+      "testRows": 674,
+      "accuracy": 1.0
+    },
+    {
+      "fault": "sequence_reset",
+      "testRows": 661,
+      "accuracy": 0.947
+    },
+    {
+      "fault": "sensor_id_collision",
+      "testRows": 694,
+      "accuracy": 0.9986
+    },
+    {
+      "fault": "pallet_zone_mapping_conflict",
+      "testRows": 656,
+      "accuracy": 0.6997
+    },
+    {
+      "fault": "container_mismatch",
+      "testRows": 676,
+      "accuracy": 0.9763
+    },
+    {
+      "fault": "mixed_quality_evidence",
+      "testRows": 679,
+      "accuracy": 1.0
+    },
+    {
+      "fault": "unresolved_mapping_risk",
+      "testRows": 669,
+      "accuracy": 0.6398
+    }
+  ],
+  "weakFaultsForNextDataExpansion": [
+    {
+      "fault": "unresolved_mapping_risk",
+      "testRows": 669,
+      "accuracy": 0.6398
+    },
+    {
+      "fault": "pallet_zone_mapping_conflict",
+      "testRows": 656,
+      "accuracy": 0.6997
+    },
+    {
+      "fault": "sensor_drift",
+      "testRows": 647,
+      "accuracy": 0.8733
+    },
+    {
+      "fault": "calibration_offset",
+      "testRows": 709,
+      "accuracy": 0.8815
+    },
+    {
+      "fault": "multi_sensor_confirmed_warming",
+      "testRows": 679,
+      "accuracy": 0.9057
+    },
+    {
+      "fault": "condensation_risk",
+      "testRows": 674,
+      "accuracy": 0.911
+    },
+    {
+      "fault": "reefer_alarm_active",
+      "testRows": 672,
+      "accuracy": 0.9152
+    },
+    {
+      "fault": "reefer_setpoint_mismatch",
+      "testRows": 669,
+      "accuracy": 0.9193
+    },
+    {
+      "fault": "normal_stable",
+      "testRows": 648,
+      "accuracy": 0.9383
+    },
+    {
+      "fault": "humidity_anomaly",
+      "testRows": 666,
+      "accuracy": 0.9459
+    }
+  ],
+  "distilledMethod": "weighted-centroid-prototypes-plus-rule-boosts",
+  "distilledMetrics": {
+    "boostScale": 0.5,
+    "faultAccuracy": 0.7725,
+    "behaviorAccuracy": 0.9406,
+    "rows": 25650
+  },
+  "boostTuning": [
+    {
+      "boostScale": 0.5,
+      "faultAccuracy": 0.7688,
+      "behaviorAccuracy": 0.9403,
+      "rows": 25651
+    },
+    {
+      "boostScale": 0.75,
+      "faultAccuracy": 0.7582,
+      "behaviorAccuracy": 0.9413,
+      "rows": 25651
+    },
+    {
+      "boostScale": 1.0,
+      "faultAccuracy": 0.7484,
+      "behaviorAccuracy": 0.9416,
+      "rows": 25651
+    },
+    {
+      "boostScale": 1.15,
+      "faultAccuracy": 0.7426,
+      "behaviorAccuracy": 0.9416,
+      "rows": 25651
+    },
+    {
+      "boostScale": 1.3,
+      "faultAccuracy": 0.7362,
+      "behaviorAccuracy": 0.9418,
+      "rows": 25651
+    },
+    {
+      "boostScale": 1.5,
+      "faultAccuracy": 0.7293,
+      "behaviorAccuracy": 0.9423,
+      "rows": 25651
+    },
+    {
+      "boostScale": 1.75,
+      "faultAccuracy": 0.7177,
+      "behaviorAccuracy": 0.9418,
+      "rows": 25651
+    },
+    {
+      "boostScale": 2.0,
+      "faultAccuracy": 0.7072,
+      "behaviorAccuracy": 0.9411,
+      "rows": 25651
+    }
+  ],
+  "bestBoostScale": 0.5,
+  "examplePredictions": [
+    {
+      "caseId": "normal_stable-01290",
+      "trueFaultLabel": "normal_stable",
+      "trueBehaviorLabel": "stable",
+      "predictedFaultLabel": "normal_stable",
+      "predictedBehaviorLabel": "stable",
+      "confidenceBand": "low",
+      "inspectionTarget": "routine evidence review",
+      "humanReviewRequired": false,
+      "margin": 0.7946,
+      "ruleBoost": 0.0,
+      "topAlternatives": [
+        {
+          "faultLabel": "normal_stable",
+          "adjustedDistance": 0.8217,
+          "rawDistance": 0.8217,
+          "ruleBoost": 0.0
+        },
+        {
+          "faultLabel": "slow_warming",
+          "adjustedDistance": 1.6163,
+          "rawDistance": 1.6163,
+          "ruleBoost": 0.0
+        },
+        {
+          "faultLabel": "cooling_or_freezing_risk",
+          "adjustedDistance": 3.8388,
+          "rawDistance": 3.8388,
+          "ruleBoost": 0.0
+        }
+      ]
+    },
+    {
+      "caseId": "slow_warming-02050",
+      "trueFaultLabel": "slow_warming",
+      "trueBehaviorLabel": "warming",
+      "predictedFaultLabel": "slow_warming",
+      "predictedBehaviorLabel": "warming",
+      "confidenceBand": "low",
+      "inspectionTarget": "temperature slope window and reefer/setpoint context",
+      "humanReviewRequired": true,
+      "margin": 3.3425,
+      "ruleBoost": 7.0,
+      "topAlternatives": [
+        {
+          "faultLabel": "slow_warming",
+          "adjustedDistance": -2.7039,
+          "rawDistance": 0.7961,
+          "ruleBoost": 7.0
+        },
+        {
+          "faultLabel": "normal_stable",
+          "adjustedDistance": 0.6386,
+          "rawDistance": 0.6386,
+          "ruleBoost": 0.0
+        },
+        {
+          "faultLabel": "multi_sensor_confirmed_warming",
+          "adjustedDistance": 3.4249,
+          "rawDistance": 3.4249,
+          "ruleBoost": 0.0
+        }
+      ]
+    },
+    {
+      "caseId": "single_sensor_false_spike-03936",
+      "trueFaultLabel": "single_sensor_false_spike",
+      "trueBehaviorLabel": "volatile",
+      "predictedFaultLabel": "single_sensor_false_spike",
+      "predictedBehaviorLabel": "volatile",
+      "confidenceBand": "medium",
+      "inspectionTarget": "suspect sensor and neighboring sensors",
+      "humanReviewRequired": true,
+      "margin": 6.4986,
+      "ruleBoost": 9.0,
+      "topAlternatives": [
+        {
+          "faultLabel": "single_sensor_false_spike",
+          "adjustedDistance": -1.0178,
+          "rawDistance": 3.4822,
+          "ruleBoost": 9.0
+        },
+        {
+          "faultLabel": "noisy_sensor",
+          "adjustedDistance": 5.4808,
+          "rawDistance": 9.4808,
+          "ruleBoost": 8.0
+        },
+        {
+          "faultLabel": "stuck_sensor",
+          "adjustedDistance": 36.452,
+          "rawDistance": 36.452,
+          "ruleBoost": 0.0
+        }
+      ]
+    },
+    {
+      "caseId": "multi_sensor_confirmed_warming-04161",
+      "trueFaultLabel": "multi_sensor_confirmed_warming",
+      "trueBehaviorLabel": "warming",
+      "predictedFaultLabel": "multi_sensor_confirmed_warming",
+      "predictedBehaviorLabel": "warming",
+      "confidenceBand": "medium",
+      "inspectionTarget": "zone consensus sensors and thermal timeline",
+      "humanReviewRequired": true,
+      "margin": 6.6743,
+      "ruleBoost": 10.0,
+      "topAlternatives": [
+        {
+          "faultLabel": "multi_sensor_confirmed_warming",
+          "adjustedDistance": -1.0198,
+          "rawDistance": 3.9802,
+          "ruleBoost": 10.0
+        },
+        {
+          "faultLabel": "reefer_setpoint_mismatch",
+          "adjustedDistance": 5.6545,
+          "rawDistance": 5.6545,
+          "ruleBoost": 0.0
+        },
+        {
+          "faultLabel": "reefer_alarm_active",
+          "adjustedDistance": 5.9915,
+          "rawDistance": 5.9915,
+          "ruleBoost": 0.0
+        }
+      ]
+    },
+    {
+      "caseId": "door_open_warming-02248",
+      "trueFaultLabel": "door_open_warming",
+      "trueBehaviorLabel": "warming",
+      "predictedFaultLabel": "door_open_warming",
+      "predictedBehaviorLabel": "warming",
+      "confidenceBand": "high",
+      "inspectionTarget": "door event timeline and affected zone",
+      "humanReviewRequired": true,
+      "margin": 57.3272,
+      "ruleBoost": 11.0,
+      "topAlternatives": [
+        {
+          "faultLabel": "door_open_warming",
+          "adjustedDistance": -3.3957,
+          "rawDistance": 2.1043,
+          "ruleBoost": 11.0
+        },
+        {
+          "faultLabel": "light_exposure",
+          "adjustedDistance": 53.9315,
+          "rawDistance": 57.9315,
+          "ruleBoost": 8.0
+        },
+        {
+          "faultLabel": "humidity_anomaly",
+          "adjustedDistance": 54.9395,
+          "rawDistance": 58.9395,
+          "ruleBoost": 8.0
+        }
+      ]
+    },
+    {
+      "caseId": "gateway_delay-03885",
+      "trueFaultLabel": "gateway_delay",
+      "trueBehaviorLabel": "data_quality_fault",
+      "predictedFaultLabel": "gateway_delay",
+      "predictedBehaviorLabel": "data_quality_fault",
+      "confidenceBand": "high",
+      "inspectionTarget": "gateway receive timestamps and route segment",
+      "humanReviewRequired": true,
+      "margin": 30.8605,
+      "ruleBoost": 10.0,
+      "topAlternatives": [
+        {
+          "faultLabel": "gateway_delay",
+          "adjustedDistance": 4.1509,
+          "rawDistance": 9.1509,
+          "ruleBoost": 10.0
+        },
+        {
+          "faultLabel": "reefer_alarm_active",
+          "adjustedDistance": 35.0114,
+          "rawDistance": 35.0114,
+          "ruleBoost": 0.0
+        },
+        {
+          "faultLabel": "late_arriving_data",
+          "adjustedDistance": 36.5147,
+          "rawDistance": 36.5147,
+          "ruleBoost": 0.0
+        }
+      ]
+    },
+    {
+      "caseId": "weak_signal-03816",
+      "trueFaultLabel": "weak_signal",
+      "trueBehaviorLabel": "evidence_insufficient",
+      "predictedFaultLabel": "weak_signal",
+      "predictedBehaviorLabel": "evidence_insufficient",
+      "confidenceBand": "high",
+      "inspectionTarget": "gateway proximity and signal-strength timeline",
+      "humanReviewRequired": true,
+      "margin": 33.5253,
+      "ruleBoost": 9.0,
+      "topAlternatives": [
+        {
+          "faultLabel": "weak_signal",
+          "adjustedDistance": -2.3226,
+          "rawDistance": 2.1774,
+          "ruleBoost": 9.0
+        },
+        {
+          "faultLabel": "missing_readings",
+          "adjustedDistance": 31.2028,
+          "rawDistance": 35.2028,
+          "ruleBoost": 8.0
+        },
+        {
+          "faultLabel": "dropout_window",
+          "adjustedDistance": 35.0438,
+          "rawDistance": 35.0438,
+          "ruleBoost": 0.0
+        }
+      ]
+    },
+    {
+      "caseId": "pallet_zone_mapping_conflict-02285",
+      "trueFaultLabel": "pallet_zone_mapping_conflict",
+      "trueBehaviorLabel": "mapping_fault",
+      "predictedFaultLabel": "pallet_zone_mapping_conflict",
+      "predictedBehaviorLabel": "mapping_fault",
+      "confidenceBand": "low",
+      "inspectionTarget": "pallet-zone mapping table",
+      "humanReviewRequired": true,
+      "margin": 0.3388,
+      "ruleBoost": 8.0,
+      "topAlternatives": [
+        {
+          "faultLabel": "pallet_zone_mapping_conflict",
+          "adjustedDistance": -2.7447,
+          "rawDistance": 1.2553,
+          "ruleBoost": 8.0
+        },
+        {
+          "faultLabel": "unresolved_mapping_risk",
+          "adjustedDistance": -2.4059,
+          "rawDistance": 1.0941,
+          "ruleBoost": 7.0
+        },
+        {
+          "faultLabel": "container_mismatch",
+          "adjustedDistance": -0.0814,
+          "rawDistance": 2.9186,
+          "ruleBoost": 6.0
+        }
+      ]
+    },
+    {
+      "caseId": "mixed_quality_evidence-00891",
+      "trueFaultLabel": "mixed_quality_evidence",
+      "trueBehaviorLabel": "evidence_insufficient",
+      "predictedFaultLabel": "mixed_quality_evidence",
+      "predictedBehaviorLabel": "evidence_insufficient",
+      "confidenceBand": "high",
+      "inspectionTarget": "data quality panel before thermal interpretation",
+      "humanReviewRequired": true,
+      "margin": 23.7183,
+      "ruleBoost": 9.0,
+      "topAlternatives": [
+        {
+          "faultLabel": "mixed_quality_evidence",
+          "adjustedDistance": 2.4123,
+          "rawDistance": 6.9123,
+          "ruleBoost": 9.0
+        },
+        {
+          "faultLabel": "dropout_window",
+          "adjustedDistance": 26.1306,
+          "rawDistance": 31.1306,
+          "ruleBoost": 10.0
+        },
+        {
+          "faultLabel": "weak_signal",
+          "adjustedDistance": 33.0439,
+          "rawDistance": 37.5439,
+          "ruleBoost": 9.0
+        }
+      ]
+    }
+  ],
+  "runtimeDistillation": {
+    "method": "weighted-centroid-prototypes-plus-rule-boosts",
+    "stdlibOnly": true,
+    "requiresPyTorch": false,
+    "requiresGpu": false,
+    "faultPrototypeCount": 38,
+    "featureCount": 19
+  },
+  "trainingBoundary": {
+    "trainingLocation": "offline Jupyter notebook",
+    "appRuntimeShouldLoadNeuralWeights": false,
+    "appRuntimeShouldRequirePyTorch": false,
+    "appRuntimeShouldRequireGpu": false,
+    "appRuntimeShouldUseDistilledRules": true
+  },
+  "safetyBoundaries": {
+    "syntheticOnly": true,
+    "advisoryOnly": true,
+    "realWorldDataUsed": false,
+    "realCustomerDataUsed": false,
+    "realShipmentDataUsed": false,
+    "runtimeGpuRequired": false,
+    "runtimeExternalServiceRequired": false,
+    "productionValidated": false,
+    "pharmaValidated": false,
+    "realWorldValidated": false,
+    "complianceCertified": false,
+    "autonomousActionsAllowed": false,
+    "deterministicRulesAuthoritative": true
+  }
+}

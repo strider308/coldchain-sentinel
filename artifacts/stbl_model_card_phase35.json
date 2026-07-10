@@ -1,0 +1,116 @@
+{
+  "modelName": "STBL - Sentinel Thermal Behavior Learner",
+  "modelType": "offline synthetic multitask learner plus distilled stdlib rules",
+  "phase": "Phase 35A - Jupyter GPU Sentinel Thermal Behavior Learner Training",
+  "status": "MODEL_CARD_READY_10X",
+  "generatedAtUtc": "2026-07-10T09:49:53.857342+00:00",
+  "syntheticOnly": true,
+  "advisoryOnly": true,
+  "realWorldDataUsed": false,
+  "realCustomerDataUsed": false,
+  "realShipmentDataUsed": false,
+  "runtimeGpuRequired": false,
+  "runtimeExternalServiceRequired": false,
+  "productionValidated": false,
+  "pharmaValidated": false,
+  "realWorldValidated": false,
+  "complianceCertified": false,
+  "autonomousActionsAllowed": false,
+  "deterministicRulesAuthoritative": true,
+  "intendedUse": "Synthetic advisory behavior prediction and human inspection guidance for demo and research evidence.",
+  "notIntendedUse": [
+    "real shipment disposition",
+    "regulated operational decisioning",
+    "automated operational action",
+    "certification claim"
+  ],
+  "inputs": [
+    "temperatureSlopeCPerHour",
+    "temperatureVolatilityC",
+    "sensorDisagreementC",
+    "zoneDisagreementC",
+    "humiditySlopePercentPerHour",
+    "doorOpenCount",
+    "shockEventCount",
+    "tiltEventCount",
+    "lightExposureCount",
+    "weakSignalShare",
+    "lowBatteryShare",
+    "missingReadingCount",
+    "duplicateReadingCount",
+    "outOfOrderCount",
+    "lateArrivalCount",
+    "maxIngestionDelaySeconds",
+    "mappingConfidenceMin",
+    "calibrationOffsetC",
+    "qualityScore"
+  ],
+  "outputs": [
+    "predicted behavior label",
+    "likely synthetic fault family",
+    "confidence band",
+    "inspection target",
+    "human review required",
+    "top alternate fault families"
+  ],
+  "trainingData": {
+    "source": "deterministic synthetic generator",
+    "realWorldDataUsed": false,
+    "faultClasses": 38,
+    "behaviorClasses": 7,
+    "trainingRows": 119699,
+    "validationRows": 25651,
+    "testRows": 25650,
+    "totalRows": 171000
+  },
+  "metrics": {
+    "neuralFinal": {
+      "faultAccuracy": 0.9551,
+      "behaviorAccuracy": 0.9952,
+      "testRows": 25650,
+      "finalValidationSnapshot": {
+        "epoch": 180,
+        "loss": 0.10261,
+        "validationFaultAccuracy": 0.9555,
+        "validationBehaviorAccuracy": 0.9953,
+        "elapsedSeconds": 316.01
+      }
+    },
+    "distilled": {
+      "boostScale": 0.5,
+      "faultAccuracy": 0.7725,
+      "behaviorAccuracy": 0.9406,
+      "rows": 25650
+    }
+  },
+  "limitations": [
+    "Synthetic-only corpus.",
+    "No external-world validation has been performed.",
+    "No operational deployment validation has been performed.",
+    "No regulated certification has been performed.",
+    "Coverage is limited to the project-defined synthetic fault universe.",
+    "Human review remains required for operational interpretation."
+  ],
+  "runtimeBoundary": {
+    "appShouldUsePyTorch": false,
+    "appShouldRequireGpu": false,
+    "appShouldRequireExternalService": false,
+    "appShouldUseDistilledJsonRules": true,
+    "distilledMethod": "weighted-centroid-prototypes-plus-rule-boosts"
+  },
+  "safetyBoundaries": {
+    "syntheticOnly": true,
+    "advisoryOnly": true,
+    "realWorldDataUsed": false,
+    "realCustomerDataUsed": false,
+    "realShipmentDataUsed": false,
+    "runtimeGpuRequired": false,
+    "runtimeExternalServiceRequired": false,
+    "productionValidated": false,
+    "pharmaValidated": false,
+    "realWorldValidated": false,
+    "complianceCertified": false,
+    "autonomousActionsAllowed": false,
+    "deterministicRulesAuthoritative": true
+  }
+}

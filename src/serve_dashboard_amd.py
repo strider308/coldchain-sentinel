@@ -358,6 +358,9 @@ def command_center_with_amd_json() -> dict[str, Any]:
         "finalDemoChecklist": "/final-demo-checklist",
         "dashboardStrategy": "/dashboard-strategy",
         "screenshotWorthyDashboard": "/screenshot-worthy-dashboard",
+        "behaviorPredictor": "/behavior-predictor",
+        "behaviorPredictorModelCard": "/behavior-predictor/model-card.json",
+        "inspectionEngine": "/inspection-engine",
     })
     return payload
 
@@ -413,6 +416,8 @@ def render_command_center_with_amd() -> str:
         <a class="button" href="/demo-freeze">Demo Freeze</a>
         <a class="button" href="/dashboard-strategy">Dashboard Strategy</a>
         <a class="button" href="/screenshot-worthy-dashboard">Screenshot-Worthy Dashboard</a>
+        <a class="button" href="/behavior-predictor">Behavior Predictor</a>
+        <a class="button" href="/inspection-engine">Inspection Engine</a>
       </div>
     </section>
 """
@@ -445,6 +450,43 @@ def validation_evidence_with_amd_json() -> dict[str, Any]:
 
 class AmdDashboardHandler(BaseDashboardHandler):
     def do_GET(self) -> None:
+        # Phases 35B-36 - distilled behavior prediction and inspection guidance
+        stbl_path = self.path.split("?", 1)[0]
+        stbl_exact = {
+            "/behavior-predictor", "/behavior-predictor.json",
+            "/behavior-predictor/model-card.json", "/behavior-predictor/training-artifact.json",
+            "/behavior-predictor/distilled-rules.json", "/inspection-engine", "/inspection-engine.json",
+        }
+        stbl_parts = [part for part in stbl_path.split("/") if part]
+        stbl_case_route = (
+            len(stbl_parts) == 3 and stbl_parts[0] == "cases"
+            and stbl_parts[2] in ("behavior-prediction.json", "inspection-plan.json", "root-cause-analysis.json")
+        )
+        if stbl_path in stbl_exact or stbl_case_route:
+            import json as stbl_json
+            from behavior_predictor_v2 import (
+                get_behavior_predictor_payload, get_distilled_rules_payload, get_model_card_payload,
+                get_training_artifact_payload, predict_case_behavior, render_behavior_predictor_html,
+            )
+            from inspection_engine_v2 import (
+                get_inspection_engine_payload, get_inspection_plan, get_root_cause_analysis,
+                render_inspection_engine_html,
+            )
+            try:
+                if stbl_path == "/behavior-predictor": body, content_type = render_behavior_predictor_html(), "text/html; charset=utf-8"
+                elif stbl_path == "/behavior-predictor.json": body, content_type = stbl_json.dumps(get_behavior_predictor_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif stbl_path == "/behavior-predictor/model-card.json": body, content_type = stbl_json.dumps(get_model_card_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif stbl_path == "/behavior-predictor/training-artifact.json": body, content_type = stbl_json.dumps(get_training_artifact_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif stbl_path == "/behavior-predictor/distilled-rules.json": body, content_type = stbl_json.dumps(get_distilled_rules_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif stbl_path == "/inspection-engine": body, content_type = render_inspection_engine_html(), "text/html; charset=utf-8"
+                elif stbl_path == "/inspection-engine.json": body, content_type = stbl_json.dumps(get_inspection_engine_payload(), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif stbl_parts[2] == "behavior-prediction.json": body, content_type = stbl_json.dumps(predict_case_behavior(stbl_parts[1]), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                elif stbl_parts[2] == "inspection-plan.json": body, content_type = stbl_json.dumps(get_inspection_plan(stbl_parts[1]), indent=2, sort_keys=True), "application/json; charset=utf-8"
+                else: body, content_type = stbl_json.dumps(get_root_cause_analysis(stbl_parts[1]), indent=2, sort_keys=True), "application/json; charset=utf-8"
+            except KeyError:
+                self.send_response(404); self.send_header("Content-Type", "application/json; charset=utf-8"); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(stbl_json.dumps({"error": "unknown case"}).encode("utf-8")); return
+            self.send_response(200); self.send_header("Content-Type", content_type); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body.encode("utf-8")); return
+
         # Phase 33 - screenshot-worthy command center strategy
         phase33_path = self.path.split("?", 1)[0]
         if phase33_path in (
@@ -1442,6 +1484,37 @@ def self_check() -> None:
     assert dashboard_strategy["screenshotWorthyChecklist"]
     for required_text in ("Sentinel Readiness Score", "What Next?", "Synthetic Live View", "Fireworks optional", "Deterministic rules authoritative"):
         assert required_text in strategy_html
+    from behavior_predictor_v2 import get_behavior_predictor_payload, render_behavior_predictor_html
+    from inspection_engine_v2 import get_inspection_engine_payload, render_inspection_engine_html
+    behavior_predictor = get_behavior_predictor_payload()
+    inspection_engine = get_inspection_engine_payload()
+    behavior_html = render_behavior_predictor_html()
+    inspection_html = render_inspection_engine_html()
+    assert behavior_predictor["phase"] == "Phase 35B - Sentinel Thermal Behavior Learner App Ingestion"
+    assert inspection_engine["phase"] == "Phase 36 - Root Cause and Inspection Recommendation Engine"
+    assert behavior_predictor["artifactAvailable"] is True
+    assert behavior_predictor["predictorAvailable"] is True
+    assert behavior_predictor["trainingRows"] == 171000
+    assert behavior_predictor["faultPrototypeCount"] == 38
+    assert behavior_predictor["featureWeightCount"] == 19
+    assert behavior_predictor["distilledMethod"] == "weighted-centroid-prototypes-plus-rule-boosts"
+    for payload in (behavior_predictor, inspection_engine):
+        assert payload["syntheticOnly"] is True
+        assert payload["advisoryOnly"] is True
+        assert payload["realWorldDataUsed"] is False
+        assert payload["runtimeGpuRequired"] is False
+        assert payload["runtimeExternalServiceRequired"] is False
+        assert payload["runtimePyTorchRequired"] is False
+        assert payload["deterministicRulesAuthoritative"] is True
+        assert payload["autonomousActionsAllowed"] is False
+    assert behavior_predictor["runtimeBoundary"]["noExternalService"] is True
+    assert inspection_engine["stblIntegrated"] is True
+    for required_text in ("Sentinel Thermal Behavior Learner", "171,000", "distilled", "Synthetic-only", "Advisory-only"):
+        assert required_text in behavior_html
+    assert "What is wrong" in inspection_html
+    assert "What should a human inspect" in inspection_html
+    assert "Synthetic-only" in inspection_html
+    assert "Advisory-only" in inspection_html
     schema = raw_schema_json()
     assert schema["schemaVersion"] == "raw-sensor-reading-v2"
     assert "timestampUtc" in schema["acceptedFields"]
