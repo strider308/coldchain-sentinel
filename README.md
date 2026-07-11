@@ -29,7 +29,7 @@ The demo is product/workflow oriented: it focuses on auditability, a clear marke
 - Optional Fireworks AI Review Assistant for non-authoritative reasoning/explanation.
 - Human review required.
 - Final disposition blocked.
-- AMD is not used or claimed. Fireworks is optional, gated by deterministic validation and safety filters, and never controls disposition.
+- Offline AMD GPU/Jupyter STBL training supplies synthetic research evidence; the live runtime uses transparent stdlib distillation and requires no GPU. Fireworks is optional, gated by deterministic validation and safety filters, and never controls disposition.
 
 ## Safety Boundaries
 
@@ -62,7 +62,7 @@ The demo is product/workflow oriented: it focuses on auditability, a clear marke
 Run the local dashboard:
 
 ```powershell
-python src/serve_dashboard.py
+python src/serve_dashboard_amd.py
 ```
 
 Open:
@@ -80,7 +80,7 @@ python src/coldchain_baseline.py
 Run the dashboard and review packet self-check:
 
 ```powershell
-python src/serve_dashboard.py --check
+python src/serve_dashboard_amd.py --check
 ```
 
 ## Docker Build And Run
@@ -122,6 +122,12 @@ http://127.0.0.1:18080/
 - `/` - deterministic dashboard.
 - `/command-center` - complete platform overview for judges and investors.
 - `/command-center.json` - machine-readable command center summary.
+- `/algorithm-console` - STBL research evidence and transparent runtime explanation.
+- `/judge-pack` - consolidated judge-facing evidence pack.
+- `/case-walkthroughs/door-open-warming` - end-to-end synthetic door-open case walkthrough.
+- `/fault-atlas` - project-defined synthetic fault universe and coverage view.
+- `/large-scale-data-lab` - synthetic scale and feature evidence.
+- `/submission-readiness` - submission-facing safety, scope, and artifact summary.
 - `/cases` - synthetic case workspace.
 - `/sensor-lab` - high-volume synthetic sensor aggregation UI.
 - `/sensor-lab.json` - machine-readable sensor lab summaries.
@@ -175,24 +181,29 @@ http://127.0.0.1:18080/
 
 SERS is advisory only. `/sers-model-card` documents its intended and prohibited uses, while `/benchmark-explainability` reports measured deterministic synthetic benchmark results against simple baselines. Neither SERS nor Fireworks can change deterministic review facts.
 
+## STBL Synthetic Research Evidence
+
+Offline GPU/Jupyter STBL research used 171,000 project-defined synthetic training windows, 38 synthetic fault classes, and 19 weighted features. The neural synthetic benchmark reported 95.51% fault accuracy and 99.52% behavior accuracy. The transparent runtime distillation uses weighted-centroid-prototypes-plus-rule-boosts and reported 77.25% synthetic fault accuracy and 94.06% synthetic behavior accuracy.
+
+This research remains synthetic-only and advisory-only. The live application runs Python standard-library logic and does not require a GPU, PyTorch, a notebook, a database, or an external service to boot. Deterministic rules remain authoritative, and external validation with representative partners and data governance would be required before a pilot.
+
 ## Public Dataset Readiness
 
 No external dataset is fetched or ingested. `/dataset-adapters`, `/dataset-license-checklist`, and `/public-dataset-benchmark-plan` document the review and isolated evaluation sequence required before future public data use.
 
 ## Recommended Demo Flow
 
-Start at `/command-center` for the full platform summary. From there, open `/sensor-lab`, `/data-pipeline`, `/model-benchmark`, `/cases/blocked-unresolved-pallet/review`, and `/ai-review` to inspect each layer.
+Start at `/command-center` for the full platform summary. From there, use the concise judge flow below before exploring the deeper synthetic evidence routes.
 
 Final judge/investor flow:
 
-1. `/command-center` - complete beta overview.
-2. `/sensor-lab` - high-volume synthetic telemetry.
-3. `/data-pipeline` - raw readings to review packet.
-4. `/model-benchmark` - deterministic synthetic benchmark against simple baselines.
-5. `/cases/blocked-unresolved-pallet/review` - reviewer workspace and deterministic facts.
-6. `/cases/blocked-unresolved-pallet/audit.md` - audit-style packet.
-7. `/ai-review` - Fireworks safety gate and deterministic fallback.
-8. `/system-status.json` and `/validation-evidence` - readiness and validation evidence.
+1. `/command-center` - complete synthetic platform overview.
+2. `/case-walkthroughs/door-open-warming` - evidence to inspection-guidance walkthrough.
+3. `/algorithm-console` - offline STBL research and distilled runtime evidence.
+4. `/fault-atlas` - project-defined synthetic fault universe.
+5. `/large-scale-data-lab` - synthetic scale and weighted-feature evidence.
+6. `/judge-pack` - concise judge-facing evidence packet.
+7. `/submission-readiness` - scope, safety boundary, and submission summary.
 
 ## What The App Proves
 
@@ -346,7 +357,7 @@ No AMD or Fireworks credentials are required for the deterministic container dem
 
 - Public GitHub repository: https://github.com/strider308/coldchain-sentinel
 - Deployment/demo app URL: https://coldchain-sentinel-35ex.onrender.com
-- Planned approach: clean export or fresh public repo from an approved source tree.
+- Repository visibility: public; confirm visibility again before external submission.
 - Do not publish the full private planning history.
 - Run Gitleaks and TruffleHog before public repo and deployment work.
 - Keep `.codegraph/`, scanner output, local logs, build/cache folders, secrets, and internal-only artifacts out of public artifacts.
@@ -355,14 +366,15 @@ No AMD or Fireworks credentials are required for the deterministic container dem
 
 - Platform: Render.
 - Public demo URL: https://coldchain-sentinel-35ex.onrender.com
+- Judge start route: https://coldchain-sentinel-35ex.onrender.com/command-center
 - Public repository: https://github.com/strider308/coldchain-sentinel
 - Status: live deterministic baseline. The Fireworks assistant is optional and must be smoke-tested after redeploy before any verification claim.
 
 ## Provider Status
 
 - Fireworks: credits received; optional AI Review Assistant integration is non-authoritative. Structured output is verified when valid JSON matches the expected schema; otherwise the app shows sanitized provider text only when it passes local safety filters, or deterministic fallback.
-- AMD: credits not received.
-- No AMD success is claimed.
+- AMD: offline GPU/Jupyter STBL research generated synthetic evidence; it is not a live runtime dependency and requires no AMD credential for app boot.
+- AMD work remains bounded to synthetic training research and transparent runtime distillation.
 - Fireworks does not decide or alter final disposition.
 - Deterministic rules remain authoritative when provider output is structured, sanitized, rejected, or unavailable.
 - Any future provider use requires a provider addendum covering credentials, access, runtime/model behavior, cost/rate limits, logging, privacy, failure modes, fallback behavior, and demo-safe wording.
@@ -373,7 +385,7 @@ No AMD or Fireworks credentials are required for the deterministic container dem
 - Real customer, patient, pharmaceutical, logistics, shipment, or sensor data.
 - Authentication, database persistence, uploads, analytics, or background jobs.
 - Operational approval, release, quarantine, discard, reroute, or customer-notification controls.
-- AMD integration or AMD success claims.
+- A runtime GPU, PyTorch, notebook, database, or external service dependency.
 - Production readiness, medical validation, pharmaceutical validation, or compliance certification.
 
 ## Post-Hackathon Roadmap
