@@ -16,6 +16,8 @@ dist/
 coverage/
 playwright-report/
 test-results/
+submission-work/
+submission-output/
 .git/
 .gitignore
 README.md

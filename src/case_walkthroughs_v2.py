@@ -5,6 +5,7 @@ from typing import Any
 
 from behavior_predictor_v2 import predict_case_behavior
 from inspection_engine_v2 import BLOCKED_ACTIONS, get_inspection_plan
+from ui_design_system_v2 import unified_page
 
 
 PHASE = "Phase 42 - End-to-End Case Walkthroughs"
@@ -82,6 +83,7 @@ def get_case_walkthroughs_payload() -> dict[str, Any]:
     }
 
 
+@unified_page
 def render_case_walkthroughs_html(case_id: str | None = None) -> str:
     if case_id is None:
         payload = get_case_walkthroughs_payload()
@@ -92,6 +94,7 @@ def render_case_walkthroughs_html(case_id: str | None = None) -> str:
         steps = "".join(f'<li><span>{step["sequence"]}</span><div><h2>{html.escape(step["title"])}</h2><p>{html.escape(step["explanation"])}</p><a href="{html.escape(step["route"])}">Evidence route</a></div></li>' for step in payload["stepTimeline"])
         routes = "".join(f'<a href="{html.escape(route)}">{html.escape(name)}</a>' for name, route in payload["evidenceRoutes"].items())
         content = f'<header><p><a href="/case-walkthroughs">All walkthroughs</a></p><h1>{html.escape(payload["title"])}</h1><p class="intro">{html.escape(payload["storyline"])}</p></header><section class="summary"><div><h2>STBL prediction</h2><p>{html.escape(str(payload["stblPrediction"]["predictedFaultLabel"]))} / {html.escape(str(payload["stblPrediction"]["confidenceBand"]))}</p></div><div><h2>Inspection plan</h2><p>{html.escape(payload["inspectionPlan"]["likelyRootCause"])}</p></div><div><h2>Inspect first</h2><p>{html.escape(payload["inspectionPlan"]["primaryInspectionTarget"])}</p></div></section><section><h2>Evidence timeline</h2><ol class="timeline">{steps}</ol></section><section class="narration"><h2>Demo narration</h2><p><strong>Judge sees:</strong> {html.escape(payload["demoNarration"]["whatJudgeSees"])}</p><p><strong>Founder says:</strong> {html.escape(payload["demoNarration"]["whatFounderSays"])}</p><p>{html.escape(payload["demoNarration"]["safeClaimBoundary"])}</p></section><nav class="evidence">{routes}</nav>'
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>End-to-End Case Walkthroughs</title><style>
+    page_title = payload["title"] if case_id else "End-to-End Case Walkthroughs"
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(page_title)}</title><style>
     :root{{--bg:#07110f;--surface:#0d1c19;--line:#29473f;--ink:#edf7f2;--muted:#a9bcb5;--accent:#62c9a5;--radius:12px}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}}main{{width:min(1120px,100%);margin:auto;padding:28px 18px 60px}}a{{color:var(--accent)}}a:focus-visible{{outline:3px solid var(--accent);outline-offset:3px}}h1{{font-size:46px;line-height:1.05;letter-spacing:-.035em;text-wrap:balance;margin:0 0 14px}}h2{{font-size:20px;text-wrap:balance}}.intro{{max-width:72ch;color:var(--muted)}}.catalog{{display:grid;grid-template-columns:1.15fr .85fr;gap:10px;margin-top:34px}}.catalog article{{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;min-height:220px}}.catalog article:nth-child(3n){{grid-column:1/-1;min-height:170px}}.catalog p{{color:var(--muted)}}.catalog a{{margin-top:auto}}.summary{{display:flex;flex-wrap:wrap;gap:10px;margin:30px 0}}.summary>div{{flex:1 1 250px;border-block:1px solid var(--line);padding:16px 0}}.summary p{{color:var(--muted)}}.timeline{{list-style:none;padding:0;margin:0;border-top:1px solid var(--line)}}.timeline li{{display:grid;grid-template-columns:46px 1fr;gap:14px;padding:16px 0;border-bottom:1px solid var(--line)}}.timeline li>span{{color:var(--accent);font-weight:800;font-size:21px}}.timeline h2,.timeline p{{margin:0 0 6px}}.timeline p{{color:var(--muted)}}.narration{{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-top:34px}}.evidence{{display:flex;flex-wrap:wrap;gap:8px;margin-top:28px}}.evidence a{{border:1px solid var(--line);border-radius:8px;padding:7px 10px}}@media(max-width:760px){{main{{padding:18px 12px 44px}}h1{{font-size:36px}}.catalog{{grid-template-columns:1fr}}.catalog article:nth-child(3n){{grid-column:auto}}.timeline li{{grid-template-columns:34px 1fr}}}}
     </style></head><body><main>{content}<nav class="evidence"><a href="/algorithm-console">Algorithm Console</a><a href="/behavior-predictor">Behavior Predictor</a><a href="/inspection-engine">Inspection Engine</a><a href="/fault-atlas">Fault Atlas</a><a href="/judge-pack">Judge Pack</a></nav><section class="narration"><h2>Safety boundary</h2><p>Synthetic-only. Advisory-only. Deterministic rules remain authoritative. Human review is required and no operational action is executed.</p></section></main></body></html>'''

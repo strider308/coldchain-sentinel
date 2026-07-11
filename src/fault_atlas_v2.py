@@ -6,6 +6,7 @@ from typing import Any
 from algorithm_console_v2 import FAULT_CATEGORIES, get_error_coverage_payload
 from behavior_predictor_v2 import load_stbl_artifacts
 from inspection_engine_v2 import BLOCKED_ACTIONS
+from ui_design_system_v2 import unified_page
 
 
 PHASE = "Phase 41 - Fault Universe Error Atlas"
@@ -122,6 +123,7 @@ def get_fault_atlas_payload() -> dict[str, Any]:
     }
 
 
+@unified_page
 def render_fault_atlas_html() -> str:
     payload = get_fault_atlas_payload()
     chips = "".join(f'<span>{html.escape(category)}: {sum(row["category"] == category for row in payload["faultRows"])}</span>' for category in payload["categoryGroups"])

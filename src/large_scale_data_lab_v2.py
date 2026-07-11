@@ -3,6 +3,8 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from ui_design_system_v2 import unified_page
+
 
 PHASE = "Phase 40 - Large-Scale Synthetic Data Demonstration"
 
@@ -47,6 +49,7 @@ def get_large_scale_data_lab_payload() -> dict[str, Any]:
     }
 
 
+@unified_page
 def render_large_scale_data_lab_html() -> str:
     payload = get_large_scale_data_lab_payload()
     rows = "".join(

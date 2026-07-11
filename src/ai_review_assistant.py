@@ -9,8 +9,11 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from fireworks_runtime_guard import guarded_provider_result, read_bounded_json, selected_model, unsafe_provider_text
+
 FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
 DEFAULT_MODEL = "accounts/fireworks/routers/kimi-k2p6-turbo"
+ALLOWED_MODELS = (DEFAULT_MODEL,)
 TIMEOUT_SECONDS = 12
 BRIEF_KEYS = ["summary", "whyBlocked", "missingEvidence", "reviewerChecklist", "rootCauseHypotheses", "safetyNote"]
 BRIEF_SCHEMA = {
@@ -43,6 +46,15 @@ UNSAFE_PHRASES = [
     "certified compliance",
     "medical validation",
     "production-ready decision",
+    "autonomous " + "release",
+    "autonomous " + "quarantine",
+    "autonomous " + "discard",
+    "autonomous " + "reroute",
+    "customer " + "notification",
+    "compliance " + "certified",
+    "pharma " + "validated",
+    "real" + "-world validated",
+    "production" + "-ready",
 ]
 
 
@@ -86,7 +98,7 @@ def deterministic_brief(packet: dict[str, Any]) -> dict[str, Any]:
 
 
 def fallback_brief(packet: dict[str, Any], reason: str, call_succeeded: bool = False) -> dict[str, Any]:
-    model = os.environ.get("FIREWORKS_MODEL") or DEFAULT_MODEL
+    model = selected_model(DEFAULT_MODEL, ALLOWED_MODELS)
     return {
         "provider": provider_status(
             bool(os.environ.get("FIREWORKS_API_KEY")),
@@ -118,9 +130,9 @@ def compact_packet(packet: dict[str, Any]) -> dict[str, Any]:
 
 
 def string_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
+    if not isinstance(value, list) or not value or any(not isinstance(item, str) for item in value):
         return []
-    return [bounded_text(str(item)) for item in value[:MAX_ITEMS] if bounded_text(str(item))]
+    return [bounded_text(item) for item in value[:MAX_ITEMS] if bounded_text(item)]
 
 
 def bounded_text(value: str, limit: int = MAX_TEXT) -> str:
@@ -134,13 +146,15 @@ def validate_brief(value: Any) -> dict[str, Any] | None:
         return None
     if not all(key in value for key in BRIEF_KEYS):
         return None
+    if not isinstance(value["summary"], str) or not isinstance(value["safetyNote"], str):
+        return None
     brief = {
-        "summary": bounded_text(str(value["summary"])),
+        "summary": bounded_text(value["summary"]),
         "whyBlocked": string_list(value["whyBlocked"]),
         "missingEvidence": string_list(value["missingEvidence"]),
         "reviewerChecklist": string_list(value["reviewerChecklist"]),
         "rootCauseHypotheses": string_list(value["rootCauseHypotheses"]),
-        "safetyNote": bounded_text(str(value["safetyNote"])),
+        "safetyNote": bounded_text(value["safetyNote"]),
     }
     if not brief["summary"] or not brief["safetyNote"]:
         return None
@@ -157,6 +171,8 @@ def flattened_brief_values(brief: dict[str, Any]) -> list[str]:
 
 
 def quality_gate(brief: dict[str, Any]) -> bool:
+    if brief_is_unsafe(brief):
+        return False
     values = flattened_brief_values(brief)
     for value in values:
         stripped = value.strip()
@@ -174,8 +190,11 @@ def quality_gate(brief: dict[str, Any]) -> bool:
 
 
 def unsafe_text(value: str) -> bool:
-    normalized = re.sub(r"\s+", " ", value.lower())
-    return any(phrase in normalized for phrase in UNSAFE_PHRASES)
+    return unsafe_provider_text(value, UNSAFE_PHRASES)
+
+
+def brief_is_unsafe(brief: dict[str, Any]) -> bool:
+    return any(unsafe_text(value) for value in flattened_brief_values(brief))
 
 
 def extracted_json_object(content: str) -> dict[str, Any] | None:
@@ -234,7 +253,7 @@ def sanitize_fireworks_text(packet: dict[str, Any], content: str) -> dict[str, A
         return None
     embedded = extracted_json_object(content)
     if embedded is not None:
-        brief = validate_brief(embedded)
+        brief = validate_brief({key: embedded.get(key) for key in BRIEF_KEYS})
         return brief if brief is not None and quality_gate(brief) else None
 
     lines = candidate_lines(content)
@@ -293,14 +312,17 @@ def call_fireworks(api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
     request = urllib.request.Request(
         FIREWORKS_URL,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
+    # Unredirected headers are sent to the fixed provider origin but are not copied
+    # by urllib's redirect handler to a different destination.
+    request.add_unredirected_header("Authorization", f"Bearer {api_key}")
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-        return json.loads(response.read().decode("utf-8"))
+        return read_bounded_json(response)
 
 
-def request_structured_fireworks(api_key: str, payload: dict[str, Any]) -> tuple[dict[str, Any], str, bool]:
+def request_structured_fireworks(api_key: str, payload: dict[str, Any], max_attempts: int = 4) -> tuple[dict[str, Any], str, bool]:
     attempts = [
         ("json_schema", True, json_schema_format()),
         ("json_schema", False, json_schema_format()),
@@ -308,7 +330,7 @@ def request_structured_fireworks(api_key: str, payload: dict[str, Any]) -> tuple
         ("json_object", False, {"type": "json_object"}),
     ]
     last_error: urllib.error.HTTPError | None = None
-    for mode, use_reasoning, response_format in attempts:
+    for mode, use_reasoning, response_format in attempts[:max_attempts]:
         attempt = dict(payload, response_format=response_format)
         if use_reasoning:
             attempt["reasoning_effort"] = "none"
@@ -320,9 +342,9 @@ def request_structured_fireworks(api_key: str, payload: dict[str, Any]) -> tuple
     raise last_error
 
 
-def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
+def request_fireworks(packet: dict[str, Any], max_attempts: int = 4) -> dict[str, Any]:
     api_key = os.environ.get("FIREWORKS_API_KEY")
-    model = os.environ.get("FIREWORKS_MODEL") or DEFAULT_MODEL
+    model = selected_model(DEFAULT_MODEL, ALLOWED_MODELS)
     if not api_key:
         return fallback_brief(packet, "Fireworks not configured")
 
@@ -334,13 +356,26 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
     }
 
     try:
-        body, structured_mode, reasoning_accepted = request_structured_fireworks(api_key, payload)
+        body, structured_mode, reasoning_accepted = request_structured_fireworks(api_key, payload, max_attempts)
     except urllib.error.HTTPError as exc:
         return fallback_brief(packet, f"Fireworks unavailable: HTTP {exc.code} {exc.reason}")
-    except (OSError, TimeoutError, urllib.error.URLError, json.JSONDecodeError) as exc:
+    except (OSError, TimeoutError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
         return fallback_brief(packet, f"Fireworks unavailable: {exc.__class__.__name__}")
 
-    content = body.get("choices", [{}])[0].get("message", {}).get("content", "")
+    try:
+        content = body["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return fallback_brief(
+            packet,
+            "Fireworks call succeeded; malformed response rejected; deterministic fallback shown.",
+            call_succeeded=True,
+        )
+    if not isinstance(content, str):
+        return fallback_brief(
+            packet,
+            "Fireworks call succeeded; malformed response rejected; deterministic fallback shown.",
+            call_succeeded=True,
+        )
     try:
         brief = validate_brief(json.loads(content))
     except json.JSONDecodeError:
@@ -363,10 +398,15 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
             "unstructuredAiResponse": "",
         }
 
+    unsafe_brief = brief is not None and brief_is_unsafe(brief)
     if brief is None or not quality_gate(brief):
         return fallback_brief(
             packet,
-            QUALITY_REJECT_STATUS,
+            (
+                "Fireworks call succeeded; output rejected by safety filter; deterministic fallback shown."
+                if unsafe_brief
+                else QUALITY_REJECT_STATUS
+            ),
             call_succeeded=True,
         )
 
@@ -385,9 +425,15 @@ def request_fireworks(packet: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_ai_review(packet: dict[str, Any]) -> dict[str, Any]:
+def build_ai_review(
+    packet: dict[str, Any],
+    *,
+    provider_attempts: int = 4,
+    provider_enabled: bool = True,
+    disabled_reason: str = "Fireworks live calls are disabled",
+) -> dict[str, Any]:
     result_before = json.dumps(packet["result"], sort_keys=True)
-    assistant = request_fireworks(packet)
+    assistant = request_fireworks(packet, provider_attempts) if provider_enabled else fallback_brief(packet, disabled_reason)
     assert json.dumps(packet["result"], sort_keys=True) == result_before
     return {
         "deterministicResult": packet["result"],
@@ -401,6 +447,17 @@ def build_ai_review(packet: dict[str, Any]) -> dict[str, Any]:
             "Not a validated pharmaceutical, medical, logistics compliance, or medical product.",
         ],
     }
+
+
+def build_runtime_ai_review(packet: dict[str, Any], provider_allowed: bool = True) -> dict[str, Any]:
+    if not provider_allowed:
+        return build_ai_review(packet, provider_enabled=False, disabled_reason="Fireworks calls are not made for HEAD requests")
+    cache_key = "ai-review:" + json.dumps(compact_packet(packet), sort_keys=True, separators=(",", ":"))
+    return guarded_provider_result(
+        cache_key,
+        lambda: build_ai_review(packet, provider_attempts=2),
+        lambda reason: build_ai_review(packet, provider_enabled=False, disabled_reason=reason),
+    )
 
 
 def self_check() -> None:

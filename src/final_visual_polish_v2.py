@@ -3,6 +3,8 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from ui_design_system_v2 import unified_page
+
 PHASE = "Phase 46 - Visual Polish and Screenshot Pass"
 ROUTES = ["/command-center", "/algorithm-console", "/judge-pack", "/case-walkthroughs/door-open-warming", "/fault-atlas", "/large-scale-data-lab", "/submission-readiness", "/demo-script-final", "/final-route-manifest"]
 PURPOSES = ["product overview", "algorithm evidence", "judge evidence hub", "end-to-end case", "fault coverage", "scale profile", "submission copy", "demo narration", "live QA manifest"]
@@ -20,6 +22,7 @@ def get_screenshot_route_map_payload() -> dict[str, Any]:
     return {"phase": PHASE, "routes": [{"route": route, "screenshotPurpose": purpose, "priority": "primary" if index < 6 else "supporting", "expectedVisualElements": ["page title", "safety badges", "evidence content", "internal route links"]} for index, (route, purpose) in enumerate(zip(ROUTES, PURPOSES))]}
 
 
+@unified_page
 def render_visual_polish_html() -> str:
     payload = get_visual_polish_payload(); checklist = get_screenshot_checklist_payload()
     checks = "".join(f"<li>{html.escape(item)}</li>" for item in checklist["screenshotChecklist"])

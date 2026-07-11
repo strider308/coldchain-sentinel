@@ -4,20 +4,24 @@ from __future__ import annotations
 
 import argparse
 import html
+import io
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http import HTTPStatus
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from ai_review_assistant import build_ai_review
+from ai_review_assistant import build_ai_review, build_runtime_ai_review
 from case_engine import audit_markdown, case_packet, evidence_json, export_markdown, get_case, load_cases, trace_json
 from coldchain_baseline import build_review_packet, evaluate_case, load_fixture
 from sensor_adapters import adapter_summary, canonical_schema, example_results
 from sensor_engine import benchmark_model, cleaning_report, consensus_report, prediction_report, sensor_summary, sensor_window, sers_risk
+from ui_design_system_v2 import apply_design_system, render_page_shell
 
 HOST = "127.0.0.1"
 PORT = 8080
+MAX_REQUEST_TARGET = 8192
 AGGREGATION_CAPABILITIES = [
     "zone min/max/average temperature",
     "threshold breaches",
@@ -71,21 +75,24 @@ def status_badges(result: dict[str, Any], extra: list[str] | None = None) -> str
 
 def render_not_found(case_id: str | None = None) -> str:
     case_ids = [case["caseId"] for case in load_cases()]
-    body = f"""
-  <header data-testid="not-found-page">
-    {global_nav()}
-    <h1>Case not found</h1>
-    <p>No synthetic case matched: {html.escape(case_id or "unknown")}.</p>
-  </header>
-  <main>
-    <section class="panel">
-      <h2>Available synthetic cases</h2>
-      <ul>{items(case_ids, "available-case")}</ul>
-      <p><a class="button" href="/cases">Back to cases</a></p>
-    </section>
-  </main>
-"""
-    return page("Case not found", body)
+    detail = (
+        f"Unknown synthetic case identifier: <code>{html.escape(case_id)}</code>."
+        if case_id
+        else "No published synthetic demo route matched this request."
+    )
+    heading = "Case not found" if case_id else "Nothing is available at this address"
+    sections = f'''<section class="ui-section ui-panel" data-testid="not-found-page">
+      <h2>{heading}</h2><p>{detail}</p>
+      <h2>Available synthetic cases</h2><ul>{items(case_ids, "available-case")}</ul>
+    </section>'''
+    return render_page_shell(
+        "Page not found",
+        "The requested demo surface does not exist or the identifier is not published.",
+        ["Synthetic-only", "No operational action"],
+        [("Return to Command Center", "/command-center")],
+        sections,
+        [("Browse synthetic cases", "/cases")],
+    )
 
 
 def items(values: list[str], test_prefix: str) -> str:
@@ -1496,9 +1503,15 @@ def render_review_packet(case: dict[str, Any] | None = None) -> str:
     return page("ColdChain Sentinel Review Packet", body)
 
 
-def render_ai_review(case: dict[str, Any] | None = None, case_id: str | None = None) -> str:
+def render_ai_review(
+    case: dict[str, Any] | None = None,
+    case_id: str | None = None,
+    *,
+    use_runtime_guard: bool = False,
+    provider_allowed: bool = True,
+) -> str:
     packet = case_packet(get_case(case_id)) if case_id else build_review_packet(case or load_fixture())
-    ai_review = build_ai_review(packet)
+    ai_review = build_runtime_ai_review(packet, provider_allowed) if use_runtime_guard else build_ai_review(packet)
     result = ai_review["deterministicResult"]
     provider = ai_review["assistant"]["provider"]
     brief = ai_review["assistant"]["brief"]
@@ -1555,6 +1568,67 @@ def render_ai_review(case: dict[str, Any] | None = None, case_id: str | None = N
     return page("ColdChain Sentinel AI Review Assistant", body)
 
 class DashboardHandler(BaseHTTPRequestHandler):
+    server_version = "ColdChainSentinel"
+    sys_version = ""
+
+    def parse_request(self) -> bool:
+        if not super().parse_request():
+            return False
+        request_words = self.requestline.split()
+        if len(request_words) >= 2 and request_words[1].startswith("//"):
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return False
+        if len(self.path) > MAX_REQUEST_TARGET:
+            self.send_error(HTTPStatus.REQUEST_URI_TOO_LONG)
+            return False
+        return True
+
+    def version_string(self) -> str:
+        return self.server_version
+
+    def end_headers(self) -> None:
+        self.send_header("Content-Security-Policy", "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'self'; worker-src 'none'; manifest-src 'none'")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        headers = getattr(self, "headers", None)
+        if headers and headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower() == "https":
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        super().end_headers()
+
+    def do_HEAD(self) -> None:  # noqa: N802 - stdlib handler API
+        output = self.wfile
+        buffered = io.BytesIO()
+        self.wfile = buffered
+        try:
+            self.do_GET()
+        finally:
+            self.wfile = output
+        response = buffered.getvalue()
+        header_end = response.find(b"\r\n\r\n")
+        if header_end >= 0:
+            output.write(response[: header_end + 4])
+
+    def _method_not_allowed(self) -> None:
+        body = b'{"error":"method not allowed"}'
+        self.send_response(HTTPStatus.METHOD_NOT_ALLOWED)
+        self.send_header("Allow", "GET, HEAD")
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    do_POST = _method_not_allowed
+    do_PUT = _method_not_allowed
+    do_PATCH = _method_not_allowed
+    do_DELETE = _method_not_allowed
+    do_TRACE = _method_not_allowed
+    do_CONNECT = _method_not_allowed
+    do_OPTIONS = _method_not_allowed
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         parsed = urlparse(self.path)
         path = parsed.path
@@ -1569,6 +1643,31 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/command-center.json":
             self.respond_json(command_center_payload())
+            return
+        if path in {
+            "/algorithm-console",
+            "/judge-pack",
+            "/case-walkthroughs/door-open-warming",
+            "/fault-atlas",
+            "/large-scale-data-lab",
+            "/submission-readiness",
+        }:
+            from algorithm_console_v2 import render_algorithm_console_html
+            from case_walkthroughs_v2 import render_case_walkthroughs_html
+            from fault_atlas_v2 import render_fault_atlas_html
+            from judge_evidence_pack_v2 import render_judge_evidence_pack_html
+            from large_scale_data_lab_v2 import render_large_scale_data_lab_html
+            from submission_readiness_v2 import render_submission_readiness_html
+
+            primary_renderers = {
+                "/algorithm-console": render_algorithm_console_html,
+                "/judge-pack": render_judge_evidence_pack_html,
+                "/case-walkthroughs/door-open-warming": lambda: render_case_walkthroughs_html("door-open-warming"),
+                "/fault-atlas": render_fault_atlas_html,
+                "/large-scale-data-lab": render_large_scale_data_lab_html,
+                "/submission-readiness": render_submission_readiness_html,
+            }
+            self.respond_text(primary_renderers[path]())
             return
         if path == "/sensor-lab":
             self.respond_text(render_sensor_lab())
@@ -1611,7 +1710,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             try:
                 self.respond_json(example_results(source_format))
             except KeyError:
-                self.respond_json({"error": "unknown synthetic adapter format", "format": source_format})
+                self.respond_json({"error": "unknown synthetic adapter format", "format": source_format}, 404)
             return
         if path == "/data-pipeline":
             self.respond_text(render_data_pipeline())
@@ -1662,57 +1761,63 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.respond_text(render_cases())
             return
         if path.startswith("/cases/"):
-            parts = [part for part in path.split("/") if part]
-            if len(parts) >= 2:
+            parts = path.split("/")
+            if len(parts) in (3, 4) and parts[0] == "" and parts[1] == "cases" and all(parts[2:]):
                 try:
-                    selected = parts[1]
-                    if len(parts) == 2:
+                    selected = parts[2]
+                    if len(parts) == 3:
                         self.respond_text(render_case_detail(selected))
                         return
-                    if parts[2] == "review":
+                    if parts[3] == "review":
                         self.respond_text(render_case_review(selected, simulate_resolved))
                         return
-                    if parts[2] == "evidence.json":
+                    if parts[3] == "evidence.json":
                         self.respond_json(evidence_json(get_case(selected), simulate_resolved))
                         return
-                    if parts[2] == "trace.json":
+                    if parts[3] == "trace.json":
                         self.respond_json(trace_json(get_case(selected), simulate_resolved))
                         return
-                    if parts[2] == "export.md":
+                    if parts[3] == "export.md":
                         self.respond_markdown(export_markdown(get_case(selected), simulate_resolved))
                         return
-                    if parts[2] == "audit.md":
+                    if parts[3] == "audit.md":
                         self.respond_markdown(audit_markdown(get_case(selected), simulate_resolved))
                         return
-                    if parts[2] == "sensor-summary.json":
+                    if parts[3] == "sensor-summary.json":
                         packet = case_packet(get_case(selected), simulate_resolved)
                         self.respond_json(sensor_summary(get_case(selected), packet["result"]))
                         return
-                    if parts[2] == "sensor-window.json":
+                    if parts[3] == "sensor-window.json":
                         try:
                             offset = int(query.get("offset", ["0"])[0])
                             limit = int(query.get("limit", ["100"])[0])
                         except ValueError:
-                            self.respond_json({"error": "offset and limit must be integers"})
+                            self.respond_json({"error": "offset and limit must be integers"}, 400)
+                            return
+                        if offset < 0 or limit < 1:
+                            self.respond_json({"error": "offset must be non-negative and limit must be positive"}, 400)
                             return
                         self.respond_json(sensor_window(get_case(selected), offset, limit))
                         return
-                    if parts[2] == "cleaning-report.json":
+                    if parts[3] == "cleaning-report.json":
                         self.respond_json(cleaning_report(get_case(selected)))
                         return
-                    if parts[2] == "prediction.json":
+                    if parts[3] == "prediction.json":
                         packet = case_packet(get_case(selected), simulate_resolved)
                         self.respond_json(prediction_report(get_case(selected), packet["result"], load_cases()))
                         return
                 except KeyError:
-                    self.respond_text(render_not_found(parts[1]), 404)
+                    if path.endswith(".json"):
+                        self.respond_json({"error": "unknown synthetic case"}, 404)
+                    else:
+                        self.respond_text(render_not_found(parts[2]), 404)
                     return
         if path == "/review":
             self.respond_text(render_review_packet())
             return
         if path == "/ai-review":
             try:
-                self.respond_text(render_ai_review(case_id=case_id))
+                self.respond_text(render_ai_review(case_id=case_id, use_runtime_guard=True, provider_allowed=self.command == "GET"))
             except KeyError:
                 self.respond_text(render_not_found(case_id), 404)
             return
@@ -1726,32 +1831,43 @@ class DashboardHandler(BaseHTTPRequestHandler):
             try:
                 packet = case_packet(get_case(case_id)) if case_id else build_review_packet(load_fixture())
             except KeyError:
-                self.respond_text(render_not_found(case_id), 404)
+                self.respond_json({"error": "unknown synthetic case"}, 404)
                 return
-            self.respond_json(build_ai_review(packet))
+            self.respond_json(build_runtime_ai_review(packet, self.command == "GET"))
             return
         if path == "/health":
             self.respond_json({"ok": True, "providers": "disabled"})
             return
-        self.respond_text(render_not_found(), 404)
+        if path.endswith(".json"):
+            self.respond_json({"error": "not found"}, 404)
+        else:
+            self.respond_text(render_not_found(), 404)
 
     def respond_text(self, content: str, status: int = 200) -> None:
+        if content.lstrip().lower().startswith("<!doctype html"):
+            content = apply_design_system(content)
+        body = content.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(content.encode("utf-8"))
+        self.wfile.write(body)
 
-    def respond_json(self, content: dict[str, Any]) -> None:
-        self.send_response(200)
+    def respond_json(self, content: dict[str, Any], status: int = 200) -> None:
+        body = json.dumps(content, sort_keys=True, allow_nan=False).encode("utf-8")
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(json.dumps(content, sort_keys=True).encode("utf-8"))
+        self.wfile.write(body)
 
     def respond_markdown(self, content: str) -> None:
+        body = content.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/markdown; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(content.encode("utf-8"))
+        self.wfile.write(body)
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - stdlib signature
         return
@@ -1760,7 +1876,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 def self_check() -> None:
     dashboard = render_dashboard()
     review = render_review_packet()
-    ai_review = render_ai_review()
+    ai_review = render_ai_review(use_runtime_guard=True, provider_allowed=False)
     packet = build_review_packet(load_fixture())
     required = [
         'data-testid="demo-overview"',

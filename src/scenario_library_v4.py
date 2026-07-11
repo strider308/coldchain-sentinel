@@ -34,6 +34,10 @@ SAFETY_BOUNDARIES = {
     "humanReviewRequiredForOperationalUse": True,
     "evidenceScope": "synthetic benchmark/demo evidence only",
 }
+REVIEW_WORKSPACE_CASE_IDS = {
+    "no-excursion-control", "single-sensor-spike", "multi-sensor-confirmed-warming",
+    "unresolved-mapping-risk", "door-open-warming", "dropout-weak-signal",
+}
 
 
 def _case_from_coverage(row: dict[str, Any]) -> dict[str, Any]:
@@ -41,6 +45,13 @@ def _case_from_coverage(row: dict[str, Any]) -> dict[str, Any]:
     case_id = family.replace("_", "-")
     title, pattern, quality, consensus = CASE_DETAILS[case_id]
     positive = float(row.get("positiveRate", 0)) > 0
+    route_links = {
+        "scenario": f"/scenario-library-v4/{case_id}.json",
+        "expandedEvidence": f"/cases/{case_id}/expanded-evidence.json",
+        "benchmark": "/expanded-benchmark",
+    }
+    if case_id in REVIEW_WORKSPACE_CASE_IDS:
+        route_links["reviewerWorkspace"] = f"/reviewer-workspace/{case_id}.json"
     return {
         "caseId": case_id,
         "title": title,
@@ -52,12 +63,7 @@ def _case_from_coverage(row: dict[str, Any]) -> dict[str, Any]:
         "expectedHumanReviewBehavior": "inspect the synthetic evidence and record review context; no operational action is executed",
         "expectedFireworksBehavior": "optional explanation support with deterministic fallback; never required for this route",
         "blockedActions": ["release blocked", "quarantine blocked", "discard blocked", "reroute blocked", "outbound messaging blocked"],
-        "routeLinks": {
-            "scenario": f"/scenario-library-v4/{case_id}.json",
-            "expandedEvidence": f"/cases/{case_id}/expanded-evidence.json",
-            "benchmark": "/expanded-benchmark",
-            "reviewerWorkspace": f"/reviewer-workspace/{case_id}.json",
-        },
+        "routeLinks": route_links,
         "safetyBoundaries": SAFETY_BOUNDARIES,
         "benchmarkEvidence": {
             "rows": row.get("rows"),

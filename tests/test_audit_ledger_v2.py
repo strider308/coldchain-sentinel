@@ -21,10 +21,6 @@ class AuditLedgerV2Tests(unittest.TestCase):
 
     def test_case_ledgers_and_required_step_fields(self):
         required = {"stepId", "label", "sourceModule", "evidenceRoute", "status", "humanMeaning", "safetyBoundary"}
-        route_suffixes = (
-            "raw-sensor-window.json", "normalized-sensor-window.json", "quality-events.json",
-            "consensus-report.json", "risk-timeline.json", "review-workbench", "fireworks-advisory.json", "trace.json",
-        )
         self.assertEqual({item["caseId"] for item in get_audit_ledger_payload()["caseLedgers"]}, set(CASE_IDS))
         for case_id in CASE_IDS:
             payload = get_case_audit_ledger_payload(case_id)
@@ -32,7 +28,11 @@ class AuditLedgerV2Tests(unittest.TestCase):
             self.assertEqual(len(payload["ledgerSteps"]), 8)
             self.assertTrue(all(required <= step.keys() for step in payload["ledgerSteps"]))
             self.assertEqual([step["sequenceLabel"] for step in payload["ledgerSteps"]], [f"SEQ-{n:02d}" for n in range(1, 9)])
-            self.assertTrue(all(expected in step["evidenceRoute"] for step, expected in zip(payload["ledgerSteps"], route_suffixes)))
+            routes = [step["evidenceRoute"] for step in payload["ledgerSteps"]]
+            self.assertEqual(routes[:5], [f"/scenario-lab/{case_id}.json"] * 5)
+            self.assertEqual(routes[5], f"/review-workbench/{case_id}.json")
+            self.assertEqual(routes[6], f"/cases/{case_id}/fireworks-advisory.json")
+            self.assertEqual(routes[7], f"/scenario-lab/{case_id}.json")
 
     def test_route_map_and_html_boundary(self):
         payload = get_audit_ledger_payload()

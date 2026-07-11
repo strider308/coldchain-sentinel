@@ -9,8 +9,11 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable
 
+from fireworks_runtime_guard import guarded_provider_result, live_calls_enabled, read_bounded_json, selected_model, unsafe_provider_text
+
 FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
 DEFAULT_MODEL = "accounts/fireworks/routers/kimi-k2p6-turbo"
+ALLOWED_MODELS = (DEFAULT_MODEL,)
 TIMEOUT_SECONDS = 45
 PHASE = "Phase 12 - Fireworks Advisory Explanation Layer"
 STATUS = "SAFETY_GATED_OPTIONAL"
@@ -60,11 +63,11 @@ def _bounded_text(value: str, limit: int = MAX_TEXT) -> str:
 
 
 def _bounded_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
+    if not isinstance(value, list) or not value or any(not isinstance(entry, str) for entry in value):
         return []
     return [
         item
-        for item in (_bounded_text(str(entry)) for entry in value[:MAX_ITEMS])
+        for item in (_bounded_text(entry) for entry in value[:MAX_ITEMS])
         if item
     ]
 
@@ -81,8 +84,7 @@ def _flatten(value: dict[str, Any]) -> str:
 
 
 def _unsafe_text(value: str) -> bool:
-    normalized = re.sub(r"\s+", " ", value.lower())
-    return any(phrase in normalized for phrase in UNSAFE_PHRASES)
+    return unsafe_provider_text(value, UNSAFE_PHRASES)
 
 
 def _validate_advisory(value: Any) -> dict[str, Any] | None:
@@ -90,14 +92,16 @@ def _validate_advisory(value: Any) -> dict[str, Any] | None:
         return None
     if not all(key in value for key in ADVISORY_KEYS):
         return None
+    if any(not isinstance(value[key], str) for key in ("summary", "humanReviewPrompt", "safetyNote")):
+        return None
 
     advisory = {
-        "summary": _bounded_text(str(value["summary"])),
+        "summary": _bounded_text(value["summary"]),
         "riskDrivers": _bounded_list(value["riskDrivers"]),
         "evidenceToInspect": _bounded_list(value["evidenceToInspect"]),
         "confidenceLimits": _bounded_list(value["confidenceLimits"]),
-        "humanReviewPrompt": _bounded_text(str(value["humanReviewPrompt"])),
-        "safetyNote": _bounded_text(str(value["safetyNote"])),
+        "humanReviewPrompt": _bounded_text(value["humanReviewPrompt"]),
+        "safetyNote": _bounded_text(value["safetyNote"]),
     }
 
     if not advisory["summary"] or not advisory["humanReviewPrompt"] or not advisory["safetyNote"]:
@@ -112,7 +116,22 @@ def _validate_advisory(value: Any) -> dict[str, Any] | None:
 def _case_context(case_id: str) -> dict[str, Any]:
     from sers_v2 import sers_case_json
 
-    sers = sers_case_json(case_id)
+    try:
+        sers = sers_case_json(case_id)
+    except KeyError:
+        from scenario_lab_v2 import get_scenario_payload
+
+        scenario = get_scenario_payload(case_id)
+        advisory = scenario["sersAdvisoryFindings"]
+        sers = {
+            "modelVersion": scenario["version"],
+            "status": "SCENARIO_ADVISORY",
+            "currentRisk": {"riskBand": advisory["riskBand"], "riskScore": advisory["riskScore"]},
+            "factorsThatMatterMost": [{"label": advisory["primaryReason"]}],
+            "confidence": {"confidenceLabel": advisory["confidenceLabel"]},
+            "advisoryOnly": True,
+            "autonomousActionsAllowed": False,
+        }
     return {
         "caseId": case_id,
         "modelVersion": sers.get("modelVersion"),
@@ -183,7 +202,7 @@ def _provider_status(
 
 
 def _fallback_payload(context: dict[str, Any], reason: str, *, call_succeeded: bool = False) -> dict[str, Any]:
-    model = os.environ.get("FIREWORKS_MODEL") or DEFAULT_MODEL
+    model = selected_model(DEFAULT_MODEL, ALLOWED_MODELS)
     return {
         "phase": PHASE,
         "status": STATUS,
@@ -269,18 +288,20 @@ def _call_fireworks(api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
         FIREWORKS_URL,
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
             "User-Agent": "ColdChainSentinel/phase12 (+https://github.com/strider308/coldchain-sentinel)",
         },
         method="POST",
     )
+    request.add_unredirected_header("Authorization", f"Bearer {api_key}")
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-        return json.loads(response.read().decode("utf-8"))
+        return read_bounded_json(response)
 
 
-def _extract_message_content(body: dict[str, Any]) -> str:
+def _extract_message_content(body: Any) -> str:
+    if not isinstance(body, dict):
+        return ""
     choices = body.get("choices")
     if not isinstance(choices, list) or not choices:
         return ""
@@ -335,7 +356,7 @@ def get_case_fireworks_advisory_payload(
     context = _case_context(case_id)
     original_context = json.dumps(context, sort_keys=True)
     api_key = os.environ.get("FIREWORKS_API_KEY")
-    model = os.environ.get("FIREWORKS_MODEL") or DEFAULT_MODEL
+    model = selected_model(DEFAULT_MODEL, ALLOWED_MODELS)
 
     if not api_key:
         return _fallback_payload(context, "Fireworks not configured")
@@ -352,7 +373,7 @@ def get_case_fireworks_advisory_payload(
         body = (requester or _call_fireworks)(api_key, request_payload)
     except urllib.error.HTTPError as exc:
         return _fallback_payload(context, f"Fireworks unavailable: HTTP {exc.code} {exc.reason}")
-    except (OSError, TimeoutError, urllib.error.URLError, json.JSONDecodeError) as exc:
+    except (OSError, TimeoutError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
         return _fallback_payload(context, f"Fireworks unavailable: {exc.__class__.__name__}")
 
     assert json.dumps(context, sort_keys=True) == original_context
@@ -389,6 +410,17 @@ def get_case_fireworks_advisory_payload(
     }
 
 
+def get_runtime_case_fireworks_advisory_payload(case_id: str, provider_allowed: bool = True) -> dict[str, Any]:
+    context = _case_context(case_id)
+    if not provider_allowed:
+        return _fallback_payload(context, "Fireworks calls are not made for HEAD requests")
+    return guarded_provider_result(
+        "fireworks-advisory:" + case_id,
+        lambda: get_case_fireworks_advisory_payload(case_id),
+        lambda reason: _fallback_payload(context, reason),
+    )
+
+
 def safety_boundaries() -> dict[str, Any]:
     return {
         "syntheticOnly": True,
@@ -417,7 +449,8 @@ def get_fireworks_advisory_payload() -> dict[str, Any]:
         "advisoryOnly": True,
         "runtimeExternalServiceRequired": False,
         "fireworksConfigured": bool(os.environ.get("FIREWORKS_API_KEY")),
-        "defaultModel": os.environ.get("FIREWORKS_MODEL") or DEFAULT_MODEL,
+        "defaultModel": selected_model(DEFAULT_MODEL, ALLOWED_MODELS),
+        "liveCallsEnabled": live_calls_enabled(),
         "cases": [
             {
                 "caseId": case_id,
@@ -442,7 +475,7 @@ def get_fireworks_model_card_payload() -> dict[str, Any]:
     return {
         "modelCardName": "Fireworks Advisory Explanation Layer",
         "phase": PHASE,
-        "model": os.environ.get("FIREWORKS_MODEL") or DEFAULT_MODEL,
+        "model": selected_model(DEFAULT_MODEL, ALLOWED_MODELS),
         "purpose": "Optional explanation support for synthetic SERS review evidence.",
         "inputScope": "Synthetic, compact, redacted advisory case context only.",
         "outputScope": "Human-readable explanation fields accepted only after safety validation.",

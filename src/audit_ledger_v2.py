@@ -22,15 +22,16 @@ def _case_route(case_id: str) -> str:
 
 
 def _ledger_steps(case_id: str) -> list[dict[str, str]]:
+    scenario_route = f"/scenario-lab/{case_id}.json"
     specs = (
-        ("reading-received", "Synthetic reading received", "sensor_data_model_v2", f"/cases/{case_id}/raw-sensor-window.json", "Synthetic input entered the review pipeline."),
-        ("schema-normalized", "Schema normalized", "sensor_data_model_v2", f"/cases/{case_id}/normalized-sensor-window.json", "Fields were normalized to the synthetic data contract."),
-        ("data-quality-checked", "Data-quality checked", "data_quality_v2", f"/cases/{case_id}/quality-events.json", "Quality findings were recorded for human inspection."),
-        ("consensus-calculated", "Consensus calculated", "consensus_v2", f"/cases/{case_id}/consensus-report.json", "Neighboring synthetic signals were compared."),
-        ("sers-advisory-generated", "SERS advisory generated", "sers_v2", f"/cases/{case_id}/risk-timeline.json", "An advisory risk signal was produced without changing deterministic facts."),
+        ("reading-received", "Synthetic reading received", "scenario_lab_v2", scenario_route, "Synthetic input entered the review pipeline."),
+        ("schema-normalized", "Schema normalized", "scenario_lab_v2", scenario_route, "Fields were normalized to the synthetic data contract."),
+        ("data-quality-checked", "Data-quality checked", "scenario_lab_v2", scenario_route, "Quality findings were recorded for human inspection."),
+        ("consensus-calculated", "Consensus calculated", "scenario_lab_v2", scenario_route, "Neighboring synthetic signals were compared."),
+        ("sers-advisory-generated", "SERS advisory generated", "scenario_lab_v2", scenario_route, "An advisory risk signal was produced without changing deterministic facts."),
         ("human-review-created", "Human review packet created", "human_review_workbench_v2", f"/review-workbench/{case_id}.json", "Evidence was prepared for a human reviewer."),
         ("explanation-available", "Fireworks explanation available or fallback available", "fireworks_advisory_v2", f"/cases/{case_id}/fireworks-advisory.json", "Optional explanation support preserves a deterministic fallback."),
-        ("autonomous-action-blocked", "Autonomous action blocked", "case_engine", f"/cases/{case_id}/trace.json", "No operational action or outbound message was executed."),
+        ("autonomous-action-blocked", "Autonomous action blocked", "scenario_lab_v2", scenario_route, "No operational action or outbound message was executed."),
     )
     return [
         {

@@ -26,6 +26,7 @@ from serve_dashboard import (
     global_nav,
     page,
     render_command_center,
+    render_not_found,
     system_status_json,
     validation_evidence_json,
 )
@@ -62,6 +63,22 @@ from sensor_data_model_v2 import (
     render_data_contract_v2_page,
     render_raw_schema_page,
 )
+
+
+def _strict_path_parts(path: str) -> tuple[str, ...]:
+    if not path.startswith("/") or path == "/" or path.endswith("/") or "//" in path:
+        return ()
+    return tuple(path[1:].split("/"))
+
+
+def _is_item_json_route(path: str, collection: str) -> bool:
+    parts = _strict_path_parts(path)
+    return len(parts) == 2 and parts[0] == collection and parts[1].endswith(".json")
+
+
+def _is_case_resource_route(path: str, resource: str) -> bool:
+    parts = _strict_path_parts(path)
+    return len(parts) == 3 and parts[0] == "cases" and parts[2] == resource
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 AMD_ENVIRONMENT_ARTIFACT = REPO_ROOT / "artifacts" / "amd_gpu_environment_evidence.json"
@@ -526,7 +543,7 @@ class AmdDashboardHandler(BaseDashboardHandler):
             "/fault-atlas", "/fault-atlas.json", "/fault-atlas/coverage.json",
             "/case-walkthroughs", "/case-walkthroughs.json",
         }
-        evidence_parts = [part for part in evidence_path.split("/") if part]
+        evidence_parts = _strict_path_parts(evidence_path)
         fault_detail = len(evidence_parts) == 2 and evidence_parts[0] == "fault-atlas" and evidence_parts[1].endswith(".json")
         case_detail = len(evidence_parts) == 2 and evidence_parts[0] == "case-walkthroughs"
         if evidence_path in evidence_exact or fault_detail or case_detail:
@@ -558,7 +575,10 @@ class AmdDashboardHandler(BaseDashboardHandler):
                     body, content_type = (evidence_json.dumps(payload, indent=2, sort_keys=True), "application/json; charset=utf-8") if evidence_parts[1].endswith(".json") else (render_case_walkthroughs_html(case_id), "text/html; charset=utf-8")
                 self.send_response(200)
             except KeyError:
-                body, content_type = evidence_json.dumps({"error": "not found", "path": evidence_path}, sort_keys=True), "application/json; charset=utf-8"
+                if evidence_path.endswith(".json"):
+                    body, content_type = evidence_json.dumps({"error": "not found"}, sort_keys=True), "application/json; charset=utf-8"
+                else:
+                    body, content_type = render_not_found(evidence_parts[1] if len(evidence_parts) > 1 else None), "text/html; charset=utf-8"
                 self.send_response(404)
             self.send_header("Content-Type", content_type); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body.encode("utf-8")); return
 
@@ -601,7 +621,7 @@ class AmdDashboardHandler(BaseDashboardHandler):
             "/behavior-predictor/model-card.json", "/behavior-predictor/training-artifact.json",
             "/behavior-predictor/distilled-rules.json", "/inspection-engine", "/inspection-engine.json",
         }
-        stbl_parts = [part for part in stbl_path.split("/") if part]
+        stbl_parts = _strict_path_parts(stbl_path)
         stbl_case_route = (
             len(stbl_parts) == 3 and stbl_parts[0] == "cases"
             and stbl_parts[2] in ("behavior-prediction.json", "inspection-plan.json", "root-cause-analysis.json")
@@ -703,11 +723,11 @@ class AmdDashboardHandler(BaseDashboardHandler):
             "/route-reliability", "/route-reliability.json", "/demo-safe-mode", "/demo-safe-mode.json",
             "/decision-simulator", "/decision-simulator.json",
         }
-        phase2228_parts = [part for part in phase2228_path.split("/") if part]
+        phase2228_parts = _strict_path_parts(phase2228_path)
         phase2228_dynamic = (
-            phase2228_path.startswith("/scenario-library-v4/") and phase2228_path.endswith(".json")
+            _is_item_json_route(phase2228_path, "scenario-library-v4")
         ) or (
-            phase2228_path.startswith("/decision-simulator/") and phase2228_path.endswith(".json")
+            _is_item_json_route(phase2228_path, "decision-simulator")
         ) or (
             len(phase2228_parts) == 3
             and phase2228_parts[0] == "cases"
@@ -821,7 +841,7 @@ class AmdDashboardHandler(BaseDashboardHandler):
             "/reviewer-workspace.json",
             "/fireworks-coverage",
             "/fireworks-coverage.json",
-        ) or (phase1718_path.startswith("/reviewer-workspace/") and phase1718_path.endswith(".json")):
+        ) or _is_item_json_route(phase1718_path, "reviewer-workspace"):
             import json as phase1718_json
             from fireworks_coverage_v2 import get_fireworks_coverage_payload, render_fireworks_coverage_html
             from reviewer_workspace_v3 import (
@@ -874,7 +894,7 @@ class AmdDashboardHandler(BaseDashboardHandler):
             "/integration-sandbox/rejection-example.json",
             "/audit-ledger",
             "/audit-ledger.json",
-        ) or (phase1516_path.startswith("/cases/") and phase1516_path.endswith("/audit-ledger.json")):
+        ) or _is_case_resource_route(phase1516_path, "audit-ledger.json"):
             import json as phase1516_json
             from audit_ledger_v2 import get_audit_ledger_payload, get_case_audit_ledger_payload, render_audit_ledger_html
             from integration_sandbox_v2 import (
@@ -907,7 +927,7 @@ class AmdDashboardHandler(BaseDashboardHandler):
                 phase1516_body = phase1516_json.dumps(get_audit_ledger_payload(), indent=2, sort_keys=True)
                 phase1516_type = "application/json; charset=utf-8"
             else:
-                phase1516_case_id = [part for part in phase1516_path.split("/") if part][1]
+                phase1516_case_id = _strict_path_parts(phase1516_path)[1]
                 try:
                     phase1516_body = phase1516_json.dumps(get_case_audit_ledger_payload(phase1516_case_id), indent=2, sort_keys=True)
                 except KeyError:
@@ -968,14 +988,12 @@ class AmdDashboardHandler(BaseDashboardHandler):
             "/fireworks-advisory.json",
             "/fireworks-model-card",
             "/fireworks-model-card.json",
-        ) or (
-            phase12_path.startswith("/cases/") and phase12_path.endswith("/fireworks-advisory.json")
-        ):
+        ) or _is_case_resource_route(phase12_path, "fireworks-advisory.json"):
             import json as phase12_json
             from fireworks_advisory_v2 import (
-                get_case_fireworks_advisory_payload,
                 get_fireworks_advisory_payload,
                 get_fireworks_model_card_payload,
+                get_runtime_case_fireworks_advisory_payload,
                 render_fireworks_advisory_html,
                 render_fireworks_model_card_html,
             )
@@ -994,10 +1012,10 @@ class AmdDashboardHandler(BaseDashboardHandler):
                     phase12_body = phase12_json.dumps(get_fireworks_model_card_payload(), indent=2, sort_keys=True)
                     phase12_type = "application/json; charset=utf-8"
                 else:
-                    phase12_parts = [part for part in phase12_path.split("/") if part]
+                    phase12_parts = _strict_path_parts(phase12_path)
                     phase12_case_id = phase12_parts[1]
                     phase12_body = phase12_json.dumps(
-                        get_case_fireworks_advisory_payload(phase12_case_id),
+                        get_runtime_case_fireworks_advisory_payload(phase12_case_id, self.command == "GET"),
                         indent=2,
                         sort_keys=True,
                     )
@@ -1050,9 +1068,7 @@ class AmdDashboardHandler(BaseDashboardHandler):
 
         # Phase 8-10 route wiring - review replay integration
         phase810_path = self.path.split("?", 1)[0]
-        if phase810_path == "/review-workbench" or phase810_path == "/review-workbench.json" or (
-            phase810_path.startswith("/review-workbench/") and phase810_path.endswith(".json")
-        ):
+        if phase810_path == "/review-workbench" or phase810_path == "/review-workbench.json" or _is_item_json_route(phase810_path, "review-workbench"):
             import json as phase810_json
             from human_review_workbench_v2 import (
                 get_review_packet_payload,
@@ -1085,9 +1101,7 @@ class AmdDashboardHandler(BaseDashboardHandler):
             self.wfile.write(phase810_body.encode("utf-8"))
             return
 
-        if phase810_path == "/incident-replay" or phase810_path == "/incident-replay.json" or (
-            phase810_path.startswith("/incident-replay/") and phase810_path.endswith(".json")
-        ):
+        if phase810_path == "/incident-replay" or phase810_path == "/incident-replay.json" or _is_item_json_route(phase810_path, "incident-replay"):
             import json as phase810_json
             from incident_replay_v2 import (
                 get_incident_replay_catalog_payload,
@@ -1164,9 +1178,7 @@ class AmdDashboardHandler(BaseDashboardHandler):
 
         # Phase 7 route wiring - synthetic scenario simulator
         phase7_path = self.path.split("?", 1)[0]
-        if phase7_path == "/scenario-lab" or phase7_path == "/scenario-lab.json" or (
-            phase7_path.startswith("/scenario-lab/") and phase7_path.endswith(".json")
-        ):
+        if phase7_path == "/scenario-lab" or phase7_path == "/scenario-lab.json" or _is_item_json_route(phase7_path, "scenario-lab"):
             import json as phase7_json
             from scenario_lab_v2 import (
                 get_scenario_lab_payload,
@@ -1282,7 +1294,7 @@ class AmdDashboardHandler(BaseDashboardHandler):
             self.respond_json(sers_json())
             return
         if path.startswith("/cases/"):
-            parts = [part for part in path.split("/") if part]
+            parts = _strict_path_parts(path)
             if len(parts) == 3 and parts[2] in ("risk-timeline.json", "sers-model-card.json"):
                 selected = parts[1]
                 try:
@@ -1291,42 +1303,50 @@ class AmdDashboardHandler(BaseDashboardHandler):
                     else:
                         self.respond_json(sers_model_card_json(selected))
                 except KeyError:
-                    self.respond_text(f"Case not found: {html.escape(selected)}", 404)
+                    self.respond_json({"error": "unknown synthetic case"}, 404)
                 return
         if path.startswith("/cases/"):
-            parts = [part for part in path.split("/") if part]
+            parts = _strict_path_parts(path)
             if len(parts) == 3 and parts[2] == "consensus-report.json":
                 selected = parts[1]
                 try:
                     self.respond_json(consensus_report_json(selected))
                 except KeyError:
-                    self.respond_text(f"Case not found: {html.escape(selected)}", 404)
+                    self.respond_json({"error": "unknown synthetic case"}, 404)
                 return
         if path.startswith("/cases/"):
-            parts = [part for part in path.split("/") if part]
+            parts = _strict_path_parts(path)
             if len(parts) == 3 and parts[2] in ("quality-events.json", "rejected-readings.json"):
                 selected = parts[1]
-                offset, limit = parse_window_query(parsed.query)
+                try:
+                    offset, limit = parse_window_query(parsed.query)
+                except ValueError as exc:
+                    self.respond_json({"error": str(exc)}, 400)
+                    return
                 try:
                     if parts[2] == "quality-events.json":
                         self.respond_json(quality_events_json(selected))
                     else:
                         self.respond_json(rejected_readings_json(selected, offset, limit))
                 except KeyError:
-                    self.respond_text(f"Case not found: {html.escape(selected)}", 404)
+                    self.respond_json({"error": "unknown synthetic case"}, 404)
                 return
         if path.startswith("/cases/"):
-            parts = [part for part in path.split("/") if part]
+            parts = _strict_path_parts(path)
             if len(parts) == 3 and parts[2] in ("raw-sensor-window.json", "normalized-sensor-window.json"):
                 selected = parts[1]
-                offset, limit = parse_window_query(parsed.query)
+                try:
+                    offset, limit = parse_window_query(parsed.query)
+                except ValueError as exc:
+                    self.respond_json({"error": str(exc)}, 400)
+                    return
                 try:
                     if parts[2] == "raw-sensor-window.json":
                         self.respond_json(raw_sensor_window_json(selected, offset, limit))
                     else:
                         self.respond_json(normalized_sensor_window_json(selected, offset, limit))
                 except KeyError:
-                    self.respond_text(f"Case not found: {html.escape(selected)}", 404)
+                    self.respond_json({"error": "unknown synthetic case"}, 404)
                 return
 
         if path == "/amd-acceleration":
@@ -1378,13 +1398,13 @@ def self_check() -> None:
     assert gpu_lab["safetyBoundaries"]["autonomousActionsAllowed"] is False
     assert "No runtime GPU dependency" in render_gpu_research_lab_html()
     from fireworks_advisory_v2 import (
-        get_case_fireworks_advisory_payload,
         get_fireworks_advisory_payload,
         get_fireworks_model_card_payload,
+        get_runtime_case_fireworks_advisory_payload,
         render_fireworks_advisory_html,
     )
     fireworks_catalog = get_fireworks_advisory_payload()
-    fireworks_case = get_case_fireworks_advisory_payload("no-excursion-control")
+    fireworks_case = get_runtime_case_fireworks_advisory_payload("no-excursion-control", provider_allowed=False)
     fireworks_card = get_fireworks_model_card_payload()
     assert fireworks_catalog["phase"] == "Phase 12 - Fireworks Advisory Explanation Layer"
     assert fireworks_catalog["syntheticOnly"] is True

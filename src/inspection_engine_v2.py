@@ -4,6 +4,7 @@ import html
 from typing import Any
 
 from behavior_predictor_v2 import CASE_FEATURES, predict_case_behavior
+from ui_design_system_v2 import unified_page
 
 
 PHASE = "Phase 36 - Root Cause and Inspection Recommendation Engine"
@@ -146,6 +147,7 @@ def get_inspection_engine_payload() -> dict[str, Any]:
     }
 
 
+@unified_page
 def render_inspection_engine_html() -> str:
     payload = get_inspection_engine_payload()
     cards = "".join(

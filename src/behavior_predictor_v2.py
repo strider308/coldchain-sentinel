@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ui_design_system_v2 import unified_page
+
 
 PHASE = "Phase 35B - Sentinel Thermal Behavior Learner App Ingestion"
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,6 +14,10 @@ ARTIFACT_PATHS = {
     "training": "artifacts/stbl_training_artifact_phase35.json",
     "rules": "artifacts/stbl_distilled_rules_phase35.json",
     "modelCard": "artifacts/stbl_model_card_phase35.json",
+}
+REVIEW_WORKSPACE_CASE_IDS = {
+    "no-excursion-control", "single-sensor-spike", "multi-sensor-confirmed-warming",
+    "unresolved-mapping-risk", "door-open-warming", "dropout-weak-signal",
 }
 FEATURES = (
     "temperatureSlopeCPerHour", "temperatureVolatilityC", "sensorDisagreementC",
@@ -168,6 +174,16 @@ def predict_case_behavior(case_id: str) -> dict[str, Any]:
         key=lambda feature: abs(values[feature] - float(rules["globalFeatureStats"][feature]["mean"])) / max(float(rules["globalFeatureStats"][feature]["std"]), 1e-9),
         reverse=True,
     )[:6]
+    evidence_routes = {
+        "scenario": f"/scenario-library-v4/{case_id}.json",
+        "evaluationRow": f"/cases/{case_id}/evaluation-row.json",
+        "inspectionPlan": f"/cases/{case_id}/inspection-plan.json",
+    }
+    if case_id in REVIEW_WORKSPACE_CASE_IDS:
+        evidence_routes.update({
+            "reviewerWorkspace": f"/reviewer-workspace/{case_id}.json",
+            "auditLedger": f"/cases/{case_id}/audit-ledger.json",
+        })
     return {
         "phase": PHASE, "caseId": case_id, "syntheticOnly": True, "advisoryOnly": True,
         "runtimeGpuRequired": False, "runtimeExternalServiceRequired": False,
@@ -193,13 +209,7 @@ def predict_case_behavior(case_id: str) -> dict[str, Any]:
             "humanReviewRequiredForOperationalInterpretation": True,
             "deterministicRulesAuthoritative": True,
         },
-        "evidenceRoutes": {
-            "scenario": f"/scenario-library-v4/{case_id}.json",
-            "evaluationRow": f"/cases/{case_id}/evaluation-row.json",
-            "reviewerWorkspace": f"/reviewer-workspace/{case_id}.json",
-            "auditLedger": f"/cases/{case_id}/audit-ledger.json",
-            "inspectionPlan": f"/cases/{case_id}/inspection-plan.json",
-        },
+        "evidenceRoutes": evidence_routes,
     }
 
 
@@ -251,6 +261,7 @@ def get_training_artifact_payload() -> dict[str, Any]: return _artifact_payload(
 def get_distilled_rules_payload() -> dict[str, Any]: return _artifact_payload("rules")
 
 
+@unified_page
 def render_behavior_predictor_html() -> str:
     payload = get_behavior_predictor_payload()
     cards = "".join(

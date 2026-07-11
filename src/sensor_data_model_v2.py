@@ -108,9 +108,11 @@ def _bounded_window_params(query: dict[str, list[str]]) -> tuple[int, int]:
     try:
         offset = int(query.get("offset", ["0"])[0])
         limit = int(query.get("limit", ["100"])[0])
-    except ValueError:
-        return 0, 100
-    return max(0, offset), min(max(1, limit), 250)
+    except ValueError as exc:
+        raise ValueError("offset and limit must be integers") from exc
+    if offset < 0 or limit < 1:
+        raise ValueError("offset must be non-negative and limit must be positive")
+    return offset, min(limit, 250)
 
 
 def raw_schema_json() -> dict[str, Any]:
@@ -419,4 +421,4 @@ def normalized_sensor_window_json(case_id: str, offset: int = 0, limit: int = 10
 
 
 def parse_window_query(raw_query: str) -> tuple[int, int]:
-    return _bounded_window_params(parse_qs(raw_query))
+    return _bounded_window_params(parse_qs(raw_query, keep_blank_values=True))
